@@ -135,17 +135,20 @@ dealer_hand: {
   /** Type-safe wrappers for the public methods exposed by the contract. */
   public declare methods: {
     
+    /** begin_game(player: struct) */
+    begin_game: ((player: AztecAddressLike) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
+
     /** compute_note_hash_and_optionally_a_nullifier(contract_address: struct, nonce: field, storage_slot: field, note_type_id: field, compute_nullifier: boolean, serialized_note: array) */
     compute_note_hash_and_optionally_a_nullifier: ((contract_address: AztecAddressLike, nonce: FieldLike, storage_slot: FieldLike, note_type_id: FieldLike, compute_nullifier: boolean, serialized_note: FieldLike[]) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
 
     /** constructor(player: struct) */
     constructor: ((player: AztecAddressLike) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
 
-    /** dealer_cards() */
-    dealer_cards: (() => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
-
     /** dealer_hand() */
     dealer_hand: (() => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
+
+    /** player_hand(player: struct) */
+    player_hand: ((player: AztecAddressLike) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
 
     /** public_dispatch(selector: field) */
     public_dispatch: ((selector: FieldLike) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;

@@ -28,7 +28,7 @@
   "include": [
     "src/**/*.ts*",
     "tests/**/*.ts",
-    "src/circuits/target/*.json",
+    "blackjack/target/*.json",
     "artifacts/**/*.ts"
   ]
 }

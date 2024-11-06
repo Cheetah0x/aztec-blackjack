@@ -48,17 +48,19 @@ describe("BlackJack", () => {
     // const result = await playerInstance.methods.play_game(player);
     // console.log("Game result:", result);
 
-    const deck = await playerInstance.methods.view_deck().simulate();
-    console.log("Deck:", deck);
-
-    const dealerCards = await playerInstance.methods
-      .dealer_cards()
+    const gameState = await playerInstance.methods
+      .begin_game(player)
       .send()
       .wait();
-    console.log("Dealer cards:", dealerCards);
+    console.log("Game state:", gameState);
 
     const dealerHand = await playerInstance.methods.dealer_hand().simulate();
     console.log("Dealer hand:", dealerHand);
+
+    const playerHand = await playerInstance.methods
+      .player_hand(player)
+      .simulate();
+    console.log("Player hand:", playerHand);
   });
 
   afterAll(async () => {

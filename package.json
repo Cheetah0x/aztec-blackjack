@@ -96,12 +96,12 @@
     "testTimeout": 200000
   },
   "scripts": {
-    "clean": "rm -rf ./src/circuits/artifacts ./src/circuits/target",
-    "codegen": "aztec codegen ./src/circuits/target --outdir src/circuits/src/artifacts",
-    "compile": "cd src/circuits && ${AZTEC_NARGO:-aztec-nargo} compile && cd ../..",
+    "clean": "rm -rf ./blackjack/src/artifacts ./blackjack/target",
+    "codegen": "aztec codegen ./blackjack/target --outdir ./blackjack/src/artifacts",
+    "compile": "cd ./blackjack/src && ${AZTEC_NARGO:-aztec-nargo} compile && cd ../..",
     "deploy": "node --loader ts-node/esm scripts/deploy.ts",
     "get-block": "node --loader ts-node/esm scripts/getBlock.ts",
-    "test": "NODE_NO_WARNINGS=1 node --experimental-vm-modules $(yarn bin jest) --no-cache --runInBand --silent=false --config jest.integration.config.json && cd src/circuits && aztec test",
+    "test": "NODE_NO_WARNINGS=1 node --experimental-vm-modules $(yarn bin jest) --no-cache --runInBand --silent=false --config jest.integration.config.json && cd ./blackjack/src/circuits && aztec test",
     "update": "aztec update --contract ./src/circuits && ./.github/scripts/update_contract.sh $(grep -oP 'tag\\s*=\\s*\"\\K[^\"]+' \"./src/circuits/Nargo.toml\" | head -1)",
     "prep": "yarn clean && yarn compile && yarn codegen",
     "build:css": "tailwindcss -i ./src/globals.css -o ./dist/output.css",
