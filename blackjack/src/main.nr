@@ -25,8 +25,6 @@
 //some finds here
 //i had to use my own serialisation and deserialisation for the deck, default ones were not working
 
-
-
 mod CardNote;
 mod test;
 
@@ -36,7 +34,7 @@ use dep::aztec::macros::aztec;
 contract BlackJack {
 
     use crate::CardNote::CardNote::{
-        Card, check_bust, Deck, draw_card, generate_deck, Hand, hand_points, new_hand, start_game,
+        Card, check_bust, Deck, draw_card, Hand, hand_points, new_hand, start_game,
     };
     use dep::aztec::{
         context::PublicContext,
@@ -61,11 +59,10 @@ contract BlackJack {
     //this is just because the constructor is private
     #[public]
     fn initialize_deck() {
-        let mut deck = Deck::new(); // Start with an empty deck
-         storage.card_deck.write(deck);
+        let deck_seed = 42;
+        let mut deck = Deck::new(deck_seed); // Start with an empty deck
+        storage.card_deck.write(deck);
     }
-
-
 
     #[public]
     #[view]
@@ -87,26 +84,33 @@ contract BlackJack {
 
     #[public]
     fn begin_game(player: AztecAddress) {
-        //read existing deck or create a new one
-        let mut deck = if storage.card_deck.read().drawn_cards.len() == 0 {
-            Deck::new()
-            } else {
-                storage.card_deck.read()
-            };
+        //read existing
+        let mut deck = storage.card_deck.read();
 
         let mut player_hand = new_hand();
         let mut dealer_hand = new_hand();
-        start_game(&mut deck, &mut player_hand, &mut dealer_hand);
+        // let mut card_deck_storage = storage.card_deck;
+        // let (updated_player_hand, updated_dealer_hand) = start_game(
+        //     &mut deck,
+        //     &mut player_hand,
+        //     &mut dealer_hand,
+        //     // card_deck_storage,
+        // );
+        // Draw cards and update deck with returned values
+        let (card1, updated_deck) = draw_card(deck);
+        let (card2, updated_deck2) = draw_card(updated_deck);
+        let (dealer_card, final_deck) = draw_card(updated_deck2);
+
+        player_hand.cards.push(card1);
+        player_hand.cards.push(card2);
+        dealer_hand.cards.push(dealer_card);
 
         //store the deck
-        // storage.card_deck.write(deck);
-
+        storage.card_deck.write(final_deck);
         //store the hands
         storage.player_hands.at(player).write(player_hand);
         storage.dealer_hand.write(dealer_hand);
     }
-
-
 
     // #[public]
     // fn player_hit(player: AztecAddress) {
@@ -187,62 +191,55 @@ contract BlackJack {
     // // For simplicity, you can store the outcome in storage or emit it using an event
     // }
 
-//     #[public]
-//     fn player_double_down(player: AztecAddress) {
-//         let mut deck = storage.card_deck.modify();
-//         let mut player_hand = storage.player_hands.at(player).modify();
+    //     #[public]
+    //     fn player_double_down(player: AztecAddress) {
+    //         let mut deck = storage.card_deck.modify();
+    //         let mut player_hand = storage.player_hands.at(player).modify();
 
-//         // Ensure player can only double down on 9, 10, or 11
-//         let player_points = hand_points(player_hand).to_u32();
-//         if player_points < 9 || player_points > 11 {
-//             // Reject the action
-//             // Emit error or revert transaction
-//             return;
-//         }
+    //         // Ensure player can only double down on 9, 10, or 11
+    //         let player_points = hand_points(player_hand).to_u32();
+    //         if player_points < 9 || player_points > 11 {
+    //             // Reject the action
+    //             // Emit error or revert transaction
+    //             return;
+    //         }
 
-//         // Double the bet (implement bet logic separately)
-//         // Take exactly one more card
-//         player_hand.cards[player_hand.card_count.to_u32()] = draw_card(deck, deck.drawn_count);
-//         deck.drawn_count += 1;
-//         player_hand.card_count += 1;
+    //         // Double the bet (implement bet logic separately)
+    //         // Take exactly one more card
+    //         player_hand.cards[player_hand.card_count.to_u32()] = draw_card(deck, deck.drawn_count);
+    //         deck.drawn_count += 1;
+    //         player_hand.card_count += 1;
 
-//         // Update the player's hand in storage
-//         storage.player_hands.at(player).write(player_hand);
+    //         // Update the player's hand in storage
+    //         storage.player_hands.at(player).write(player_hand);
 
-//         // Proceed to dealer's turn
-//         dealer_play(player);
-//     }
+    //         // Proceed to dealer's turn
+    //         dealer_play(player);
+    //     }
 
-//     pub fn hand_points(hand: Hand) -> Field {
-//     let mut points = 0;
-//     let mut aces = 0;
+    //     pub fn hand_points(hand: Hand) -> Field {
+    //     let mut points = 0;
+    //     let mut aces = 0;
 
-//     for i in 0..hand.card_count.to_u32() {
-//         let card = hand.cards[i];
-//         if card.rank == 1 {
-//             aces += 1;
-//             points += 11; // Assume Ace as 11 initially
-//         } else if card.rank >= 10 {
-//             points += 10;
-//         } else {
-//             points += card.rank;
-//         }
-//     }
+    //     for i in 0..hand.card_count.to_u32() {
+    //         let card = hand.cards[i];
+    //         if card.rank == 1 {
+    //             aces += 1;
+    //             points += 11; // Assume Ace as 11 initially
+    //         } else if card.rank >= 10 {
+    //             points += 10;
+    //         } else {
+    //             points += card.rank;
+    //         }
+    //     }
 
-//     // Adjust for aces if points exceed 21
-//     while points > 21 && aces > 0 {
-//         points -= 10; // Convert an Ace from 11 to 1
-//         aces -= 1;
-//     }
+    //     // Adjust for aces if points exceed 21
+    //     while points > 21 && aces > 0 {
+    //         points -= 10; // Convert an Ace from 11 to 1
+    //         aces -= 1;
+    //     }
 
-//     points
-// }
-
-
-
-
-
-
-
+    //     points
+    // }
 
 }

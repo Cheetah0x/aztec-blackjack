@@ -1,19 +1,23 @@
-
 // CardNote.nr
 pub mod CardNote {
-    use dep::aztec::{protocol_types::{
-        address::AztecAddress,
-        constants::MAX_NOTE_HASH_READ_REQUESTS_PER_CALL,
-        traits::{Deserialize, FromField, Serialize, ToField},
-    },
-    oracle::random::random,
-    prelude::PublicMutable,
+    use dep::aztec::{
+        oracle::random::random,
+        prelude::{PublicContext, PublicMutable},
+        protocol_types::{
+            address::AztecAddress,
+            constants::MAX_NOTE_HASH_READ_REQUESTS_PER_CALL,
+            traits::{Deserialize, FromField, Serialize, ToField},
+        },
     };
     use std::hash::poseidon2;
 
     global MAX_CARDS_IN_HAND: u32 = 6;
-    global MAX_CARDS_IN_DECK: u32 = 52;
-
+    global BITS_PER_FIELD: u32 = 255;
+    global TOTAL_CARDS: u32 = 52;
+    global FIELDS_FOR_DECK: u32 = 7;
+    global MAX_DRAW_ATTEMPTS: u32 = 5;
+    global BITS_PER_BYTE: u32 = 8;
+    global NUM_BITMAP_BYTES: u32 = (TOTAL_CARDS + BITS_PER_BYTE - 1) / BITS_PER_BYTE; // 7 bytes
 
     //-------------------------------CARD-----------------------------------
 
@@ -37,6 +41,16 @@ pub mod CardNote {
         fn to_field(self) -> Field {
             self.rank as Field + self.suit as Field * 65536
         }
+    }
+
+    fn card_id(rank: u8, suit: u8) -> u8 {
+        (suit as u8) * 13 + (rank as u8) - 1 // Ranks from 1 to 13
+    }
+
+    fn id_to_card(card_id: u8) -> Card {
+        let rank = (card_id % 13) + 1;
+        let suit = card_id / 13;
+        Card { rank: rank as Field, suit: suit as Field }
     }
 
     //-------------------------------HAND-----------------------------------
@@ -90,82 +104,202 @@ pub mod CardNote {
 
     //-------------------------------DECK-----------------------------------
     pub struct Deck {
-        // only track the cards that have been drawn
-        drawn_cards: BoundedVec<Card, MAX_CARDS_IN_DECK>,
+        // Bitmask to track used cards
+        drawn_cards_bitmap: [u8; NUM_BITMAP_BYTES],
+        deck_seed: Field,
+        draw_counter: u32,
     }
 
-
-    impl Serialize<MAX_CARDS_IN_DECK> for Deck {  // Implement Serialize with explicit size
-        fn serialize(self) -> [Field; MAX_CARDS_IN_DECK] {
-            let mut fields = [Field::empty(); MAX_CARDS_IN_DECK];
-            for i in 0..self.drawn_cards.len() {
-                fields[i] = self.drawn_cards.get(i).to_field();
+    impl Serialize<NUM_BITMAP_BYTES + 2> for Deck { // Implement Serialize with explicit size
+        fn serialize(self) -> [Field; NUM_BITMAP_BYTES + 2] {
+            let mut fields = [Field::empty(); NUM_BITMAP_BYTES + 2];
+            // Use first 5 indices for bitmap
+            for i in 0..NUM_BITMAP_BYTES {
+                fields[i] = self.drawn_cards_bitmap[i] as Field;
             }
+            // Use last 2 indices for seed and counter
+            fields[NUM_BITMAP_BYTES] = self.deck_seed;
+            fields[NUM_BITMAP_BYTES + 1] = self.draw_counter as Field;
             fields
         }
     }
 
-    impl Deserialize<MAX_CARDS_IN_DECK> for Deck {
-        fn deserialize(fields: [Field; MAX_CARDS_IN_DECK]) -> Self {
-            let mut drawn_cards = BoundedVec::new();
-            for i in 0..drawn_cards.len() {
-                drawn_cards.push(Card::from_field(fields[i]));
+    impl Deserialize<NUM_BITMAP_BYTES + 2> for Deck {
+        fn deserialize(fields: [Field; NUM_BITMAP_BYTES + 2]) -> Self {
+            let mut drawn_cards_bitmap = [0 as u8; NUM_BITMAP_BYTES];
+            // Get bitmap from first 5 indices
+            for i in 0..NUM_BITMAP_BYTES {
+                drawn_cards_bitmap[i] = fields[i] as u8;
             }
-            Deck { drawn_cards }
+            // Get seed and counter from last 2 indices
+            let deck_seed = fields[NUM_BITMAP_BYTES];
+            let draw_counter = fields[NUM_BITMAP_BYTES + 1] as u32;
+            Deck { drawn_cards_bitmap, deck_seed, draw_counter }
         }
     }
 
     impl Deck {
-        fn new() -> Self {
-            Deck {
-            drawn_cards: BoundedVec::new(), // Empty at start
+        fn new(deck_seed: Field) -> Self {
+            // Initialize with all zeros
+            let drawn_cards_bitmap = [0 as u8; NUM_BITMAP_BYTES];
+            let draw_counter = 0;
+
+            Self { drawn_cards_bitmap, deck_seed, draw_counter }
         }
     }
-}
-
 
     impl ToField for Deck {
         fn to_field(self) -> Field {
-            let mut card_fields = [Field::empty(); MAX_CARDS_IN_DECK];
-            for i in 0..self.drawn_cards.len() {
-                card_fields[i] = self.drawn_cards.get(i).to_field();
+            let mut card_fields = [Field::empty(); FIELDS_FOR_DECK];
+            for i in 0..self.drawn_cards_bitmap.len() {
+                card_fields[i] = self.drawn_cards_bitmap[i].to_field();
             }
+            card_fields[FIELDS_FOR_DECK] = self.deck_seed;
+            card_fields[(FIELDS_FOR_DECK + 1)] = self.draw_counter.to_field();
             // Hash all card fields into a single Field
-                poseidon2::Poseidon2::hash(card_fields, MAX_CARDS_IN_DECK)
+            poseidon2::Poseidon2::hash(card_fields, FIELDS_FOR_DECK)
         }
     }
+
+    //-------------------------------BITMASK UTILITIES-----------------------------------
+    fn is_card_used(deck: &mut Deck, card_index: u8) -> bool {
+        assert(card_index as u32 < TOTAL_CARDS as u32); // Ensure valid card index
+        let field_index = (card_index / 8) as u32;
+        assert(field_index as u32 < FIELDS_FOR_DECK as u32); // Ensure valid field index
+        let bit_index = card_index % 8;
+        let current_field = deck.drawn_cards_bitmap[field_index as u8];
+        (current_field & (1 << bit_index)) != 0
+    }
+
+    fn set_card_used(deck: &mut Deck, card_index: u8) {
+        assert(card_index as u32 < TOTAL_CARDS as u32); // Ensure valid card index
+        let field_index = (card_index / 8) as u32;
+        assert(field_index < FIELDS_FOR_DECK as u32); // Ensure valid field index
+        let bit_index = card_index % 8;
+        let mut current_value = deck.drawn_cards_bitmap[field_index as u8];
+        current_value |= 1 << bit_index;
+        deck.drawn_cards_bitmap[field_index as u8] = current_value;
+    }
+
+    //---------------------------FIESTEL NETWORK-----------------------------------
+
+    fn feistel_network(seed: Field, input: u64) -> u64 {
+        let mut left = (input) & 0xFFFF_FFFF;
+        let mut right = (input >> 32) & 0xFFFF_FFFF;
+
+        // Round 1
+        let temp = right;
+        right = left ^ (feistel_function(right, seed, 0)) as u64;
+        left = temp;
+
+        // Round 2
+        let temp = right;
+        right = left ^ (feistel_function(right, seed, 1)) as u64;
+        left = temp;
+
+        // Round 3
+        let temp = right;
+        right = left ^ (feistel_function(right, seed, 2)) as u64;
+        left = temp;
+
+        // Combine left and right
+        let output = (left << 32) | right;
+        // Map output to 0..51
+        (output % 52) as u64
+    }
+
+    fn feistel_function(value: u64, seed: Field, round: u32) -> Field {
+        let value_field = value as Field;
+        poseidon2::Poseidon2::hash([value_field, seed, round.to_field()], 3)
+    }
+
+    //-------------------------------DRAW CARD-----------------------------------
+
+    pub fn generate_card(deck_seed: Field, draw_counter: u64) -> Card {
+        let card_index = feistel_network(deck_seed, draw_counter);
+        id_to_card(card_index as u8)
+    }
+
+    pub fn draw_card(mut deck: Deck) -> (Card, Deck) {
+        let mut card_index = 0;
+        let mut unique_card_found = false;
+        let mut final_counter = 0;
+
+        // Instead of breaking, we'll use the first valid card we find
+        for attempt in 0..MAX_DRAW_ATTEMPTS {
+            if !unique_card_found {
+                // Only process if we haven't found a card yet
+                let current_draw_counter = deck.draw_counter + attempt;
+                let current_card_index =
+                    feistel_network(deck.deck_seed, current_draw_counter as u64) as u8;
+
+                if !is_card_used(&mut deck, current_card_index) {
+                    // Found a valid card
+                    card_index = current_card_index;
+                    final_counter = current_draw_counter + 1;
+                    unique_card_found = true;
+
+                    set_card_used(&mut deck, card_index);
+                }
+            }
+        }
+
+        // Update the counter after the loop
+        if unique_card_found {
+            deck.draw_counter = final_counter;
+        } else {
+            deck.draw_counter = deck.draw_counter + MAX_DRAW_ATTEMPTS;
+        }
+
+        let card = if unique_card_found {
+            id_to_card(card_index)
+        } else {
+            Card { rank: 0.to_field(), suit: 0.to_field() }
+        };
+
+        (card, deck)
+    }
+
     //-------------------------------CARD FUNCTIONS-----------------------------------
 
-    fn new(rank: Field, suit: Field) -> Card {
-        Card { rank, suit }
-    }
-
-    pub fn draw_card(deck: &mut Deck) -> Card {
-        let card = generate_card();
-        if deck.drawn_cards.len() < MAX_CARDS_IN_DECK {
-            deck.drawn_cards.push(card);
-        }
-        card
-    }
-
-    pub fn start_game(deck: &mut Deck, player_hand: &mut Hand, dealer_hand: &mut Hand) -> (Hand, Hand) {
+    pub fn start_game(
+        deck: &mut Deck,
+        player_hand: &mut Hand,
+        dealer_hand: &mut Hand,
+        // card_deck_storage: PublicMutable<Deck, &mut PublicContext>,
+    ) -> (Hand, Hand, &mut Deck) {
         // Draw two cards for the player
         player_hand.cards = BoundedVec::new();
         dealer_hand.cards = BoundedVec::new();
 
         //draw two cards for the player
-        player_hand.cards.push(draw_card(deck));
-        player_hand.cards.push(draw_card(deck));
+        let (card1, updated_deck) = draw_card(*deck);
+        player_hand.cards.push(card1);
+        let (card2, updated_deck) = draw_card(updated_deck);
+        player_hand.cards.push(card2);
 
         // Draw one card for the dealer (face-up)
-        dealer_hand.cards.push(draw_card(deck));
+        let (dealer_card, final_deck) = draw_card(updated_deck);
+        dealer_hand.cards.push(dealer_card);
 
-        (*player_hand, *dealer_hand)
+        (*player_hand, *dealer_hand, deck)
     }
+
+    // pub fn player_hit1(deck: &mut Deck, player_hand: &mut Hand) -> bool {
+    //     if let Some(card) = draw_card(deck) {
+    //         player_hand.cards.push(card);
+    //         // Check if player busts
+    //         check_bust(player_hand)
+    //     } else {
+    //         // Handle no more cards scenario
+    //         true // Assuming player busts if no more cards can be drawn
+    //     }
+    // }
 
     pub fn player_hit(deck: &mut Deck, player_hand: &mut Hand) -> bool {
         // Draw a new card
-        player_hand.cards.push(draw_card(deck));
+        let (card, deck) = draw_card(*deck);
+        player_hand.cards.push(card);
 
         // Check if player busts
         check_bust(player_hand)
@@ -175,7 +309,8 @@ pub mod CardNote {
         // Dealer must hit until the hand value is 17 or more
         //need to make this a loop without while loop
         if hand_points(dealer_hand) as u8 < 17 {
-            dealer_hand.cards.push(draw_card(deck));
+            let (card, deck) = draw_card(*deck);
+            dealer_hand.cards.push(card);
         }
     }
 
@@ -183,9 +318,9 @@ pub mod CardNote {
         if (card.rank as u8 > 1) & (card.rank as u8 <= 10) {
             card.rank
         } else if card.rank == 1 {
-            11 // Ace as 11 initially
+            11.to_field() // Ace as 11 initially
         } else {
-            10 //Face cards (J,Q,K)
+            10.to_field() //Face cards (J,Q,K)
         }
     }
 
@@ -195,7 +330,6 @@ pub mod CardNote {
 
         let player_bust = check_bust(player_hand);
         let dealer_bust = check_bust(dealer_hand);
-
 
         //player wins = 0
         //dealer wins = 1
@@ -207,13 +341,11 @@ pub mod CardNote {
         } else if player_points > dealer_points {
             0.to_field()
         } else if dealer_points > player_points {
-            1.to_field()    
+            1.to_field()
         } else {
             2.to_field()
         }
     }
-
-    
 
     pub fn hand_points(hand: &mut Hand) -> Field {
         let mut points = 0;
@@ -232,56 +364,35 @@ pub mod CardNote {
         // Adjust for Aces if points exceed 21.
         let max_points = 21;
         if (points as u8 > max_points) & (aces > 0) {
-            points = points - 10;  // Adjust one Ace from 11 to 1
+            points = points - 10; // Adjust one Ace from 11 to 1
         }
         if (points as u8 > max_points) & (aces > 1) {
-        points = points - 10;  // Adjust second Ace if needed
+            points = points - 10; // Adjust second Ace if needed
         }
         if (points as u8 > max_points) & (aces > 2) {
-            points = points - 10;  // Adjust third Ace if needed
+            points = points - 10; // Adjust third Ace if needed
         }
 
         // The above conditions effectively handle up to 4 Aces in a hand.
-
         points
     }
-
 
     pub fn check_bust(hand: &mut Hand) -> bool {
         hand_points(hand) as u8 > 21
     }
 
-    pub fn generate_deck() -> Deck {
-        let mut deck: Deck = Deck {
-            drawn_cards: BoundedVec::new(),
-        };
+    // pub fn generate_deck() -> Deck {
+    //     let mut deck: Deck = Deck { drawn_cards_bitmap: [0.to_field(); FIELDS_FOR_DECK] };
 
-        let mut index = 0;
-        for suit in 1..=4 {
-            for rank in 1..=13 {
-                deck.drawn_cards.push(new(rank as Field, suit as Field));
-                index += 1;
-            }
-        }
-        deck
-    }
-
-    fn generate_card() -> Card {
-        // Generate two independent random values
-        // let random_rank = unsafe { random() };
-        // let random_suit = unsafe { random() };
-
-        let random_rank = 3.to_field();
-        let random_suit = 2.to_field();
-        // Use modulo operations to set rank and suit within their respective ranges
-        let rank = (random_rank as u64 % 13) + 1; // rank from 1 to 13
-        let suit = (random_suit as u64 % 4) + 1;   // suit from 1 to 4
-
-        Card { 
-            rank: rank as Field, 
-            suit: suit as Field 
-        }
-    }
+    //     let mut index = 0;
+    //     for suit in 1..=4 {
+    //         for rank in 1..=13 {
+    //             let card_index = card_id(rank as u8, suit as u8);
+    //             set_card_used(&mut deck, card_index);
+    //         }
+    //     }
+    //     deck
+    // }
 
 }
 

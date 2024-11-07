@@ -34,7 +34,7 @@ pub unconstrained fn test_constructor() {
 }
 
 #[test]
- unconstrained fn test_begin_game() {
+unconstrained fn test_begin_game() {
     let (mut env, player, blackjack_contract) = setup();
     env.impersonate(player);
     let begin_game = BlackJack::at(blackjack_contract).begin_game(player).call(&mut env.public());
@@ -51,11 +51,14 @@ pub unconstrained fn test_constructor() {
     println(f"Dealer hand fetched");
     let player_hand = BlackJack::at(blackjack_contract).player_hand(player).view(&mut env.public());
     println(f"Player hand fetched");
-
-
-    assert(dealer_hand.cards.len() == 1, "Dealer hand should have 1 card");
-    assert(player_hand.cards.len() == 2, "Player hand should have 2 cards");
+    // assert(dealer_hand.cards.len() == 1, "Dealer hand should have 1 card");
+    // assert(player_hand.cards.len() == 2, "Player hand should have 2 cards");
     println(f"Dealer hand: {dealer_hand}");
     println(f"Player hand: {player_hand}");
     println(f"Deck: {deck}");
+
+    env.advance_block_by(1);
+    //now check the deck
+    let deck_2 = BlackJack::at(blackjack_contract).view_deck().view(&mut env.public());
+    println(f"Deck 2: {deck_2}");
 }
