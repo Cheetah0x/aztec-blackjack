@@ -22,168 +22,278 @@
 
 // No surrender.
 
-//some finds here
-//i had to use my own serialisation and deserialisation for the deck, default ones were not working
+//time to add some privacy
+//what actually needs to be private here?
 
-mod CardNote;
+mod helpers;
 mod test;
+mod notes;
 
 use dep::aztec::macros::aztec;
 
 #[aztec]
 contract BlackJack {
 
-    use crate::CardNote::CardNote::{
-        Card, check_bust, dealer_play, Deck, determine_winner_helper, draw_card, Hand, hand_points,
-        new_hand, player_hit_helper, start_game,
-    };
+    use crate::helpers::CardHelpersPrivate::{card_points, draw_card, draw_until_seventeen};
+    use crate::notes::CardNote::{Card, CardNote, Deck};
+    use dep::address_note::address_note::AddressNote;
     use dep::aztec::{
-        context::PublicContext,
-        macros::{functions::{initializer, private, public, view}, storage::storage},
-        prelude::{AztecAddress, Map, PrivateMutable, PublicImmutable, PublicMutable},
+        context::{PrivateContext, PublicContext},
+        encrypted_logs::encrypted_note_emission::encode_and_encrypt_note,
+        keys::getters::get_public_keys,
+        macros::{functions::{initializer, internal, private, public, view}, storage::storage},
+        oracle::random::random,
+        prelude::{
+            AztecAddress, Map, NoteGetterOptions, PrivateImmutable, PrivateMutable, PrivateSet,
+            PublicImmutable, PublicMutable,
+        },
     };
+    use dep::token::Token;
+    use dep::value_note::value_note::ValueNote;
 
+    //will have the deck in there but wont use tbh
     #[storage]
     struct Storage<Context> {
-        card_deck: PublicMutable<Deck, Context>,
-        player_hands: Map<AztecAddress, PublicMutable<Hand, Context>, Context>,
-        dealer_hand: PublicMutable<Hand, Context>,
+        player_address: PrivateMutable<AddressNote, Context>,
+        card_deck_used: PrivateSet<CardNote, Context>,
+        player_hand: Map<AztecAddress, PrivateSet<CardNote, Context>, Context>,
+        dealer_hand: PrivateSet<CardNote, Context>,
+        player_bust: PublicMutable<bool, Context>, //should probs map this to the player address
+        dealer_bust: PublicMutable<bool, Context>,
+        bets: Map<AztecAddress, PrivateSet<ValueNote, Context>, Context>,
+        insurance: Map<AztecAddress, PrivateSet<ValueNote, Context>, Context>,
+    }
+
+    #[initializer]
+    #[private]
+    fn constructor(player_address: AztecAddress) {
+        let player_keys = get_public_keys(player_address);
+        let mut player_note = AddressNote::new(player_address, player_address);
+        storage.player_address.initialize(&mut player_note).emit(encode_and_encrypt_note(
+            &mut context,
+            player_keys.ovpk_m,
+            player_address,
+            player_address,
+        ));
     }
 
     #[private]
-    #[initializer]
-    fn constructor(player: AztecAddress) {
-        // let mut deck = Deck::new(); // Start with an empty deck
-        // storage.card_deck.write(deck);
+    #[view]
+    fn player_points(player: AztecAddress) -> u8 {
+        let location = storage.player_hand.at(player);
+        let points = card_points(location);
+        points as u8
     }
 
-    //this is just because the constructor is private
-    #[public]
-    fn initialize_deck() {
-        let deck_seed = 30;
-        let mut deck = Deck::new(deck_seed); // Start with an empty deck
-        storage.card_deck.write(deck);
+    #[private]
+    #[view]
+    fn dealer_points() -> u8 {
+        let location = storage.dealer_hand;
+        let points = card_points(location);
+        points as u8
     }
 
     #[public]
     #[view]
-    fn dealer_hand() -> Hand {
-        storage.dealer_hand.read()
+    fn is_player_bust_view() -> bool {
+        storage.player_bust.read()
     }
 
     #[public]
     #[view]
-    fn player_hand(player: AztecAddress) -> Hand {
-        storage.player_hands.at(player).read()
+    fn is_dealer_bust_view() -> bool {
+        storage.dealer_bust.read()
     }
 
-    #[public]
-    #[view]
-    fn view_deck() -> Deck {
-        storage.card_deck.read()
+    //at the start of the game, the player will need to make a bet
+    //the user will have to send the funds to the contract
+    #[private]
+    fn make_bet(bet: Field, token: AztecAddress) {
+        let player = context.msg_sender();
+        let contract_address = context.this_address();
+
+        let player_keys = get_public_keys(player);
+        let mut bet_note = ValueNote::new(bet, player);
+
+        //will need to think about this from a security standpoint, need to only update the balance if the transfer is successful
+        //maybe have it in a loop so that the note only gets added if the transfer is successful
+        storage.bets.at(player).insert(&mut bet_note).emit(encode_and_encrypt_note(
+            &mut context,
+            player_keys.ovpk_m,
+            player,
+            player,
+        ));
+
+        Token::at(token).transfer(contract_address, bet).call(&mut context);
     }
 
-    #[public]
-    #[view]
-    fn determine_winner(player: AztecAddress) -> u8 {
-        let mut player_hand = storage.player_hands.at(player).read();
-        let mut dealer_hand = storage.dealer_hand.read();
+    //insurance that the user can take out if the dealer has an ace on the first card
+    #[private]
+    fn place_insurance_bet(insurance_bet: Field, token: AztecAddress) {
+        let player = context.msg_sender();
+        let contract_address = context.this_address();
 
-        let outcome: u8 = determine_winner_helper(&mut player_hand, &mut dealer_hand);
+        let options = NoteGetterOptions::new();
+        let dealer_cards: BoundedVec<CardNote, 16> = storage.dealer_hand.get_notes(options);
+        let first_card = dealer_cards.get_unchecked(0);
+        assert(first_card.card.rank == 1, "Dealer does not have an ace");
 
-        outcome
+        let player_keys = get_public_keys(player);
+        let mut insurance_note = ValueNote::new(insurance_bet, player);
+        storage.insurance.at(player).insert(&mut insurance_note).emit(encode_and_encrypt_note(
+            &mut context,
+            player_keys.ovpk_m,
+            player,
+            player,
+        ));
+
+        Token::at(token).transfer(contract_address, insurance_bet).call(&mut context);
     }
 
-    #[public]
-    #[view]
-    fn view_player_points(player: AztecAddress) -> u8 {
-        let mut player_hand = storage.player_hands.at(player).read();
-
-        let player_points = hand_points(&mut player_hand);
-
-        player_points
-    }
-
-    #[public]
-    #[view]
-    fn view_dealer_points() -> u8 {
-        let mut dealer_hand = storage.dealer_hand.read();
-
-        let dealer_points = hand_points(&mut dealer_hand);
-
-        dealer_points
-    }
-
-    #[public]
+    #[private]
     fn begin_game(player: AztecAddress) {
-        //read existing
-        let mut deck = storage.card_deck.read();
+        //add logic that a game can only be started if the player has made a bet
+        //1. will need to read the cards from the deck that are being used.
+        //there is the limitation of only being able to fetch 16 at a time. This is a constraint we will have the mention
+        //Other option is to have another storage/ loop for this to store the other cards in another vec.
+        //2. will do this by fetching the notes of the cards and populating an array.
+        let options = NoteGetterOptions::new();
+        let used_cards: BoundedVec<CardNote, 16> = storage.card_deck_used.get_notes(options);
 
-        let mut player_hand = new_hand();
-        let mut dealer_hand = new_hand();
-
-        // Draw cards and update deck with returned values
-        let (player_hand, dealer_hand, deck) =
-            start_game(&mut deck, &mut player_hand, &mut dealer_hand);
-
-        //store the deck
-        storage.card_deck.write(deck);
-        //store the hands
-        storage.player_hands.at(player).write(player_hand);
-        storage.dealer_hand.write(dealer_hand);
-    }
-
-    #[public]
-    fn player_hit(player: AztecAddress) {
-        let mut deck = storage.card_deck.read();
-        let mut player_hand = storage.player_hands.at(player).read();
-
-        let bust = player_hit_helper(&mut deck, &mut player_hand);
-        player_hand.bust = bust;
-
-        // Write the updated hand and deck back to storage
-        storage.player_hands.at(player).write(player_hand);
-        storage.card_deck.write(deck);
-    }
-
-    #[public]
-    fn player_stand(player: AztecAddress) {
-        // Proceed to dealer's turn
-        let mut deck = storage.card_deck.read();
-        let mut dealer_hand = storage.dealer_hand.read();
-
-        dealer_play(&mut deck, &mut dealer_hand);
-
-        storage.dealer_hand.write(dealer_hand);
-        storage.card_deck.write(deck);
-    }
-
-    #[public]
-    fn player_double_down(player: AztecAddress) {
-        let mut deck = storage.card_deck.read();
-        let mut player_hand = storage.player_hands.at(player).read();
-        let mut dealer_hand = storage.dealer_hand.read();
-
-        // Ensure player can only double down on 9, 10, or 11
-        let player_points = hand_points(&mut player_hand);
-        if player_points < 9 {
-            if player_points > 11 {
-                assert(false, "Player can only double down on 9, 10, or 11");
-            }
+        //3. Will need to draw the cards, can do this using random atm, 2 for the player, one for the dealer and add them to the hands.
+        for i in 0..2 {
+            draw_card(player, storage.player_hand.at(player), &mut context);
         }
 
-        // Double the bet (implement bet logic separately)
-        // Take exactly one more card
-        player_hand.cards.push(draw_card(&mut deck));
+        //for the dealer card
+        draw_card(player, storage.dealer_hand, &mut context);
+    }
 
-        // Update the player's hand in storage
-        storage.player_hands.at(player).write(player_hand);
+    #[private]
+    fn player_hit(player: AztecAddress) {
+        //read the cards that have been used, will not do this for now.
+        //get the player cards
+        let points = card_points(storage.player_hand.at(player));
+        //can have the bust state internal here, will have to update it at somepoint
+        let mut bust = false;
+        if points > 21 {
+            bust = true;
+            BlackJack::at(context.this_address()).is_player_bust(bust).enqueue(&mut context);
+        }
 
-        // Proceed to dealer's turn
-        dealer_play(&mut deck, &mut dealer_hand);
+        if bust == false {
+            //draw a new card
+            draw_card(player, storage.player_hand.at(player), &mut context);
+        }
 
-        storage.dealer_hand.write(dealer_hand);
-        storage.card_deck.write(deck);
+        //get the new points
+        let points = card_points(storage.player_hand.at(player));
+
+        //can have the bust state internal here, will have to update it at somepoint
+        let mut bust = false;
+        if points > 21 {
+            bust = true;
+            BlackJack::at(context.this_address()).is_player_bust(true).enqueue(&mut context);
+        }
+    }
+
+    //now i need to add the logic for the player standing and what happens with the dealer.
+    #[private]
+    fn player_stand(player: AztecAddress) -> bool {
+        //time for the dealer to play
+        //fetch the dealer hand
+        let dealer_points = card_points(storage.dealer_hand);
+
+        //get the players points
+        let player_points = card_points(storage.player_hand.at(player));
+
+        //now the dealer plays until he is bust or he beats the player
+        let location = storage.dealer_hand;
+        let dealer_points2 =
+            draw_until_seventeen(dealer_points as u8, player, &mut context, location);
+
+        let mut bust = false;
+        if dealer_points2 > 21 {
+            bust = true;
+            BlackJack::at(context.this_address()).is_dealer_bust(bust).enqueue(&mut context);
+        }
+
+        //check if the dealer has beaten the player
+        let mut win = false;
+        if dealer_points2 > player_points as u8 & dealer_points2 as u8 <= 21 {
+            win = false;
+        } else {
+            win = true;
+        }
+        //need to add the logic for a push ie, the points are the same, add the helper function for win
+        win
+        //add the logic to pay out the player if they win
+    }
+
+    //logic for double down
+    #[private]
+    fn double_down(token: AztecAddress) {
+        let player = context.msg_sender();
+        let contract_address = context.this_address();
+        let player_keys = get_public_keys(player);
+        let location = storage.player_hand.at(player);
+        let player_points = card_points(location);
+        if (player_points < 9) {
+            assert( false, "Player can only double down on 9,10 or 11");
+        }
+        if (player_points > 11) {
+            assert(false, "Player can only double down on 9,10 or 11");
+        }
+        //need to figure out how to split the hand
+
+        //get the original bet amount, this will be the last note the player can decrpypt
+        let mut options = NoteGetterOptions::new();
+        options
+            .set_limit(1);
+        let bet_note = storage.bets.at(player).get_notes(options);
+        let note = bet_note.get_unchecked(1);
+        let bet = note.value;
+
+        //then bet this again
+        let mut bet_note = ValueNote::new(bet, player);
+
+        //will need to think about this from a security standpoint, need to only update the balance if the transfer is successful
+        //maybe have it in a loop so that the note only gets added if the transfer is successful
+        storage.bets.at(player).insert(&mut bet_note).emit(encode_and_encrypt_note(
+            &mut context,
+            player_keys.ovpk_m,
+            player,
+            player,
+        ));
+
+        Token::at(token).transfer(contract_address, bet).call(&mut context);
+        //so the player has doubled the bet, now they continue the game as normal
+
+    }
+
+    #[public]
+    fn is_player_bust(bust: bool) {
+        storage.player_bust.write(bust)
+    }
+
+    #[public]
+    fn is_dealer_bust(bust: bool) {
+        storage.dealer_bust.write(bust)
     }
 
 }
+
+//this should be ok for now, need to do a check so the player can only stand if the have not lost.
+
+//Things to do:
+//1. Add the logic for the player to double down and split.
+//will not add the split for now.
+//2. Add the logic for the dealer to win.
+//3. Add the logic for the player to win.
+//4. Add the logic for the insurance.
+
+//need to add the logic for betting, the contract till count as an escrow and will
+//accept a standard ERC20 on aztec
+//will need to integrate the token in the contract
+
+//add the ole token for the payments next.
