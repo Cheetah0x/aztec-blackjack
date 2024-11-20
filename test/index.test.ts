@@ -13,11 +13,11 @@ import {
 import {
   BlackJackContractArtifact,
   BlackJackContract,
-} from "../blackjack/src/artifacts/BlackJack";
+} from "../src/circuits/src/artifacts/BlackJack";
 import {
   TokenContractArtifact,
   TokenContract,
-} from "../blackjack/src/artifacts/Token";
+} from "../src/circuits/src/artifacts/Token";
 import { setupSandbox, createAccount } from "./utils";
 
 describe("BlackJack Priv", () => {
@@ -204,6 +204,13 @@ describe("BlackJack Priv", () => {
 
     console.log("Player cards", player_cards);
     console.log("Dealer cards", dealer_cards);
+  });
+
+  it("check if blackjack", async () => {
+    const blackjack = await playerBlackJackInstance.methods
+      .is_blackjack_view()
+      .simulate();
+    console.log("Is blackjack?", blackjack);
   });
 
   it("player hits", async () => {

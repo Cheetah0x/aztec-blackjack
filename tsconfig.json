@@ -21,14 +21,14 @@
     "jsx": "react-jsx",
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"],
+      "@/*": ["src/circuits/*"],
       "@aztec/*": ["./node_modules/@aztec/*"]
     }
   },
   "include": [
-    "src/**/*.ts*",
+    "src/circuits/**/*.ts*",
     "tests/**/*.ts",
-    "blackjack/target/*.json",
+    "src/circuits/target/*.json",
     "artifacts/**/*.ts"
   ]
 }
