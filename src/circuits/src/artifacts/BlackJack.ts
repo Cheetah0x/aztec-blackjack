@@ -177,6 +177,9 @@ ValueNote: {
     /** contract_address() */
     contract_address: (() => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
 
+    /** dealer_hand() */
+    dealer_hand: (() => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
+
     /** dealer_points() */
     dealer_points: (() => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
 
@@ -197,6 +200,9 @@ ValueNote: {
 
     /** place_insurance_bet(insurance_bet: field, token: struct) */
     place_insurance_bet: ((insurance_bet: FieldLike, token: AztecAddressLike) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
+
+    /** player_hand(player: struct) */
+    player_hand: ((player: AztecAddressLike) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
 
     /** player_hit() */
     player_hit: (() => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;

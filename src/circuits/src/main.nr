@@ -96,6 +96,40 @@ contract BlackJack {
 
     #[private]
     #[view]
+    fn player_hand(player: AztecAddress) -> [Card; 8] {
+        let location = storage.player_hand.at(player);
+        let cards_vec = location.get_notes(NoteGetterOptions::new());
+        let mut cards_array = [Card { rank: 0, suit: 0 }; 8];
+
+        for i in 0..cards_vec.max_len() {
+            if i < cards_vec.len() {
+                let card = cards_vec.get_unchecked(i);
+                cards_array[i] = card.card;
+            }
+        }
+
+        cards_array
+    }
+
+    #[private]
+    #[view]
+    fn dealer_hand() -> [Card; 8] {
+        let location = storage.dealer_hand;
+        let cards_vec = location.get_notes(NoteGetterOptions::new());
+        let mut cards_array = [Card { rank: 0, suit: 0 }; 8];
+
+        for i in 0..cards_vec.max_len() {
+            if i < cards_vec.len() {
+                let card = cards_vec.get_unchecked(i);
+                cards_array[i] = card.card;
+            }
+        }
+
+        cards_array
+    }
+
+    #[private]
+    #[view]
     fn dealer_points() -> u8 {
         let location = storage.dealer_hand;
         let points = card_points(location);

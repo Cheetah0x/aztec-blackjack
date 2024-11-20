@@ -8,19 +8,44 @@ import ConnectAccountPopup from "../components/ConnectAccountPopup";
 import { useAztecAccount } from "../contexts/AztecAccountContext";
 import { AztecAddress } from "@aztec/aztec.js";
 
-const suits = ["♠", "♥", "♦", "♣"];
-const values = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"];
+const suitSymbols = ["♠", "♥", "♦", "♣"];
+const rankSymbols: { [key: number]: string } = {
+  1: "A",
+  2: "2",
+  3: "3",
+  4: "4",
+  5: "5",
+  6: "6",
+  7: "7",
+  8: "8",
+  9: "9",
+  10: "10",
+  11: "J",
+  12: "Q",
+  13: "K",
+};
 
-function getRandomCard() {
-  const suit = suits[Math.floor(Math.random() * suits.length)];
-  const value = values[Math.floor(Math.random() * values.length)];
-  return { suit, value };
-}
+// function getRandomCard() {
+//   const suit = suits[Math.floor(Math.random() * suits.length)];
+//   const value = values[Math.floor(Math.random() * values.length)];
+//   return { suit, value };
+// }
 
 interface Card {
   suit: string;
   value: string;
   hidden?: boolean;
+}
+
+interface CardData {
+  rank: bigint;
+  suit: bigint;
+}
+
+interface ProcessedCard {
+  value: string;
+  suit: string;
+  hidden: boolean;
 }
 
 export default function BlackjackGame() {
@@ -43,11 +68,39 @@ export default function BlackjackGame() {
   const [contractPublicBalance, setContractPublicBalance] = useState<bigint | null>(null);
   const [isPopupOpen, setIsPopupOpen] = useState(false);
   const [secret, setSecret] = useState<string | null>(null);
+  const [playerPoints, setPlayerPoints] = useState(0);
+  const [dealerPoints, setDealerPoints] = useState(0);
+  const [isPlayerBust, setIsPlayerBust] = useState(false);
+  const [isDealerBust, setIsDealerBust] = useState(false);
+  const [isBlackjack, setIsBlackjack] = useState(false);
 
   const handleSecretGenerated = (secret: string) => {
     setSecret(secret);
     setIsPopupOpen(false);
   };
+
+  useEffect(() => {
+    if (gameState === "ended") {
+      // Display game result to the player
+      if (isPlayerBust) {
+        alert("You busted! Dealer wins.");
+      } else if (isDealerBust) {
+        alert("Dealer busted! You win!");
+      } else if (isBlackjack) {
+        alert("Blackjack! You win!");
+      } else {
+        // Compare points to determine winner
+        if (playerPoints > dealerPoints) {
+          alert("You win!");
+        } else if (playerPoints < dealerPoints) {
+          alert("Dealer wins!");
+        } else {
+          alert("Push!");
+        }
+      }
+    }
+  }, [gameState]);
+  
 
   const initializeWallet = async () => {
     if (!wallet) {
@@ -100,7 +153,7 @@ export default function BlackjackGame() {
   };
 
   const mintTokens = async () => {
-    if (tokenInstance && wallet) {
+    if (tokenInstance && wallet && blackjackAddress) {
       try {
         console.log("Minting tokens...");
         const player = await wallet.getAddress();
@@ -108,6 +161,11 @@ export default function BlackjackGame() {
         const mintPubTx = await tokenInstance.methods.mint_public(player, 1000).send().wait();
         console.log("Minted 1000 tokens to player:", mintTx);
         console.log("Minted 1000 tokens to player:", mintPubTx);
+
+        const sendContractpriv = await tokenInstance.methods.transfer(AztecAddress.fromString(blackjackAddress), 200).send().wait();
+        console.log("Sent 200 tokens to blackjack contract:", sendContractpriv);
+        const sendContractpub = await tokenInstance.methods.transfer_public(player, AztecAddress.fromString(blackjackAddress), 200, 0).send().wait();
+        console.log("Sent 200 tokens to blackjack contract:", sendContractpub);
         await updateBalances();
       } catch (err) {
         console.error("Error minting tokens:", err);
@@ -131,22 +189,171 @@ export default function BlackjackGame() {
     }
   };
 
-  const dealCards = () => {
+  // const dealCards = () => {
+  //   if (bet <= 0 || contractPublicBalance === null || contractPublicBalance < bet) return;
+
+  //   setPlayerHand([getRandomCard(), getRandomCard()]);
+  //   setDealerHand([getRandomCard(), { ...getRandomCard(), hidden: true }]);
+  //   setGameState("playing");
+  // };
+
+  const dealCards = async () => {
     if (bet <= 0 || contractPublicBalance === null || contractPublicBalance < bet) return;
+  
+    try {
+      console.log("Dealing cards...");
+      if (!blackjackInstance) return;
+      const dealTx = await blackjackInstance.methods
+        .begin_game()
+        .send()
+        .wait();
+  
+      console.log("Dealt cards:", dealTx);
+  
+      // Fetch player and dealer hands
+      await updateHands();
+  
+      setGameState("playing");
+    } catch (err) {
+      console.error("Error dealing cards:", err);
+    }
+  };
+  
 
-    setPlayerHand([getRandomCard(), getRandomCard()]);
-    setDealerHand([getRandomCard(), { ...getRandomCard(), hidden: true }]);
-    setGameState("playing");
+  // const hit = () => {
+  //   setPlayerHand([...playerHand, getRandomCard()]);
+  // };
+  const hit = async () => {
+    try {
+      if (!blackjackInstance) return;
+      console.log("Player hits...");
+      const hitTx = await blackjackInstance.methods
+        .player_hit()
+        .send()
+        .wait();
+  
+      console.log("Player hit:", hitTx);
+  
+      await updateHands();
+    } catch (err) {
+      console.error("Error hitting:", err);
+    }
+  };
+  
+
+  // const stand = () => {
+  //   setDealerHand(dealerHand.map((card) => ({ ...card, hidden: false })));
+  //   setGameState("ended");
+  // };
+  const stand = async () => {
+    try {
+      if (!blackjackInstance) return;
+      console.log("Player stands...");
+      const standTx = await blackjackInstance.methods
+        .player_stand()
+        .send()
+        .wait();
+  
+      console.log("Player stand:", standTx);
+  
+      await updateHands();
+  
+      setGameState("ended");
+    } catch (err) {
+      console.error("Error standing:", err);
+    }
   };
 
-  const hit = () => {
-    setPlayerHand([...playerHand, getRandomCard()]);
-  };
+  function processHandData(handRaw: CardData[]): ProcessedCard[] {
+    // Filter out cards where both rank and suit are zero
+    const filteredHand = handRaw.filter(
+      (card: CardData) => !(card.rank === 0n && card.suit === 0n)
+    );
+  
+    const processedHand = filteredHand.map((card: CardData) => {
+      const rankNumber = Number(card.rank);
+      const suitNumber = Number(card.suit);
+      const rank = rankSymbols[rankNumber];
+      const suit = suitSymbols[suitNumber];
+      return {
+        value: rank,
+        suit: suit,
+        hidden: false,
+      };
+    });
+  
+    return processedHand;
+  }
+  
+  
+  
 
-  const stand = () => {
-    setDealerHand(dealerHand.map((card) => ({ ...card, hidden: false })));
-    setGameState("ended");
+  const updateHands = async () => {
+    if (!blackjackInstance || !wallet) return;
+  
+    try {
+      const player = await wallet.getAddress();
+  
+      // Get player's points
+      const playerPointsValue = await blackjackInstance.methods
+        .player_points(player)
+        .simulate();
+      setPlayerPoints(Number(playerPointsValue));
+  
+      // Get dealer's points
+      const dealerPointsValue = await blackjackInstance.methods
+        .dealer_points()
+        .simulate();
+      setDealerPoints(Number(dealerPointsValue));
+  
+      // Get player's bust status
+      const isPlayerBustValue = await blackjackInstance.methods
+        .is_player_bust_view()
+        .simulate();
+      setIsPlayerBust(isPlayerBustValue);
+  
+      // Get dealer's bust status
+      const isDealerBustValue = await blackjackInstance.methods
+        .is_dealer_bust_view()
+        .simulate();
+      setIsDealerBust(isDealerBustValue);
+  
+      // Get if blackjack
+      const isBlackjackValue = await blackjackInstance.methods
+        .is_blackjack_view()
+        .simulate();
+      setIsBlackjack(isBlackjackValue);
+  
+      // Fetch player's hand
+      const playerHandRaw: CardData[] = await blackjackInstance.methods
+        .player_hand(player)
+        .simulate();
+      const playerHandProcessed = processHandData(playerHandRaw);
+      setPlayerHand(playerHandProcessed);
+  
+      // Fetch dealer's hand
+      const dealerHandRaw: CardData[] = await blackjackInstance.methods
+        .dealer_hand()
+        .simulate();
+      const dealerHandProcessed = processHandData(dealerHandRaw);
+  
+      // Hide dealer's first card if the game is in 'playing' state
+      if (gameState === "playing" && dealerHandProcessed.length > 0) {
+        dealerHandProcessed[0].hidden = true;
+      }
+      setDealerHand(dealerHandProcessed);
+  
+      // Handle game state transitions
+      if (isPlayerBustValue || isDealerBustValue || isBlackjackValue) {
+        setGameState("ended");
+      }
+    } catch (err) {
+      console.error("Error updating hands:", err);
+    }
   };
+  
+  
+  
 
   const renderCard = (card: Card, index: number, isDealer = false) => (
     <motion.div
@@ -158,13 +365,14 @@ export default function BlackjackGame() {
       className={`absolute ${
         card.hidden
           ? "bg-primary text-primary-foreground"
-          : "bg-background text-foreground"
+          : "bg-white text-black"
       } w-16 h-24 rounded-lg shadow-lg flex items-center justify-center text-2xl font-bold border-2 border-border`}
       style={{ left: `${index * 30}px` }}
     >
       {card.hidden ? "?" : `${card.value}${card.suit}`}
     </motion.div>
   );
+  
 
   return (
     <div className="min-h-screen bg-green-800 flex flex-col items-center justify-center p-4">

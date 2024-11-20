@@ -204,6 +204,17 @@ describe("BlackJack Priv", () => {
 
     console.log("Player cards", player_cards);
     console.log("Dealer cards", dealer_cards);
+
+    //get the hands
+    const player_hand = await playerBlackJackInstance.methods
+      .player_hand(player)
+      .simulate();
+    console.log("Player hand", player_hand);
+
+    const dealer_hand = await playerBlackJackInstance.methods
+      .dealer_hand()
+      .simulate();
+    console.log("Dealer hand", dealer_hand);
   });
 
   it("check if blackjack", async () => {
@@ -227,6 +238,17 @@ describe("BlackJack Priv", () => {
       .is_player_bust_view()
       .simulate();
     console.log("Is the player bust?", is_bust);
+
+    //get the hands
+    const player_hand = await playerBlackJackInstance.methods
+      .player_hand(player)
+      .simulate();
+    console.log("Player hand", player_hand);
+
+    const dealer_hand = await playerBlackJackInstance.methods
+      .dealer_hand()
+      .simulate();
+    console.log("Dealer hand", dealer_hand);
     // }
   });
 
@@ -248,5 +270,16 @@ describe("BlackJack Priv", () => {
       .dealer_points()
       .simulate();
     console.log("Dealer total", dealer_total);
+
+    //get the hands
+    const player_hand = await playerBlackJackInstance.methods
+      .player_hand(player)
+      .simulate();
+    console.log("Player hand", player_hand);
+
+    const dealer_hand = await playerBlackJackInstance.methods
+      .dealer_hand()
+      .simulate();
+    console.log("Dealer hand", dealer_hand);
   });
 });
