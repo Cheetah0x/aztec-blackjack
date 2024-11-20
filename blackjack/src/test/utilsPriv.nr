@@ -11,28 +11,16 @@ use dep::aztec::{
 use dep::std::println;
 use dep::token::Token;
 
-
-pub unconstrained fn setupPriv() -> (&mut TestEnvironment, AztecAddress, AztecAddress) {
+pub unconstrained fn setupPriv() -> (&mut TestEnvironment, AztecAddress, AztecAddress, AztecAddress) {
     let mut env = TestEnvironment::new();
     let player = env.create_account();
     env.impersonate(player);
 
-    let initializer = BlackJack::interface().constructor(player);
+    let initializer = BlackJack::interface().constructor();
     let blackjack_deploy = env.deploy_self("BlackJack").with_private_initializer(initializer);
+    let blackjack_address = blackjack_deploy.to_address();
 
-    (&mut env, player, blackjack_deploy.to_address())
-}
-
-pub unconstrained fn tokenSetup(
-    env: &mut TestEnvironment,
-    blackjack_address: AztecAddress,
-    player: AztecAddress
-    ) -> AztecAddress {
-
-    env.impersonate(player);
-
-    println(f"deploying contract");
-    //deploy the token contract
+    //setup the token here
     let initializer_call_interface = Token::interface().constructor(
         player,
         "TestToken0000000000000000000000",
@@ -40,26 +28,56 @@ pub unconstrained fn tokenSetup(
         18,
     );
 
-    let token_contract = env.deploy_self("Token").with_public_void_initializer(initializer_call_interface);
+    let token_contract =
+        env.deploy_self("Token").with_public_void_initializer(initializer_call_interface);
     println(f"contract deployed");
-    let token_contract_address = token_contract.to_address();
-    println(f"token address mint {token_contract_address}");
-    env.advance_block_by(1);
+    let token_address = token_contract.to_address();
+    println(f"token address {token_address}");
 
-    //now need to mint to the player
-    let mint_amount = 1000;
-    println(f"minting to player");
-    //failing here
-    env.impersonate(player);
-    Token::at(token_contract_address).mint_to_private(player, mint_amount).call(&mut env.private());
-    println(f"minted to player");
-
-    (token_contract_address)
+    //mint tokens to the player
+    // env.impersonate(player);
+    // Token::at(token_address).mint_to_private(player, 1000).call(&mut env.private());
+    (&mut env, player, blackjack_address, token_address)
 }
+
+// pub unconstrained fn tokenSetup(
+//     env: &mut TestEnvironment,
+//     blackjack_address: AztecAddress,
+//     player: AztecAddress
+//     ) -> AztecAddress {
+
+//     env.impersonate(player);
+//     println(f"setup player {player}");
+
+//     println(f"deploying contract");
+//     //deploy the token contract
+//     let initializer_call_interface = Token::interface().constructor(
+//         player,
+//         "TestToken0000000000000000000000",
+//         "TT00000000000000000000000000000",
+//         18,
+//     );
+
+//     let token_contract = env.deploy_self("Token").with_public_void_initializer(initializer_call_interface);
+//     println(f"contract deployed");
+//     let token_contract_address = token_contract.to_address();
+//     println(f"token address mint {token_contract_address}");
+//     env.advance_block_by(1);
+
+//     //now need to mint to the player
+//     let mint_amount = 1000;
+//     println(f"minting to player");
+//     //failing here
+//     env.impersonate(player);
+//     Token::at(token_contract_address).mint_to_private(player, mint_amount).call(&mut env.private());
+//     println(f"minted to player");
+
+//     (token_contract_address)
+// }
 
 #[test]
 unconstrained fn playerStorage() {
-    let (mut env, player, blackjack_contract) = setupPriv();
+    let (mut env, player, blackjack_contract, token_address) = setupPriv();
 
     env.impersonate(blackjack_contract);
 
@@ -76,11 +94,11 @@ unconstrained fn playerStorage() {
 
 #[test]
 unconstrained fn beginGame() {
-    let (mut env, player, blackjack_contract) = setupPriv();
+    let (mut env, player, blackjack_contract, token_address) = setupPriv();
 
     env.impersonate(player);
 
-    let begin_game = BlackJack::at(blackjack_contract).begin_game(player).call(&mut env.private());
+    let begin_game = BlackJack::at(blackjack_contract).begin_game().call(&mut env.private());
 
     println(f"Begin game: {begin_game}");
 
@@ -127,7 +145,7 @@ unconstrained fn beginGame() {
 
     //now need to hit
     env.impersonate(player);
-    let hit = BlackJack::at(blackjack_contract).player_hit(player).call(&mut env.private());
+    let hit = BlackJack::at(blackjack_contract).player_hit().call(&mut env.private());
 
     env.advance_block_by(1);
 
@@ -162,7 +180,7 @@ unconstrained fn beginGame() {
 
     //add the test for when the player stands
     env.impersonate(player);
-    let win = BlackJack::at(blackjack_contract).player_stand(player).call(&mut env.private());
+    let win = BlackJack::at(blackjack_contract).player_stand().call(&mut env.private());
     println(f"Win: {win}");
     //get the dealer cards
     env.impersonate(blackjack_contract);
@@ -207,3 +225,13 @@ unconstrained fn cardValue() {
         // println(f"Card value: {card_value}");
     }
 }
+
+// #[test]
+// unconstrained fn doubleDown() {
+//     let (mut env, player, blackjack_contract, token_address) = setupPriv();
+
+//     env.impersonate(player);
+
+//     //will need to add a two card notes to the storage to simulate this environment.
+//     //also need t0 get the token logic working properly for this to work.
+// }

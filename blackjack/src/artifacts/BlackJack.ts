@@ -70,14 +70,14 @@ export class BlackJackContract extends ContractBase {
   /**
    * Creates a tx to deploy a new instance of this contract.
    */
-  public static deploy(wallet: Wallet, player: AztecAddressLike) {
+  public static deploy(wallet: Wallet, ) {
     return new DeployMethod<BlackJackContract>(PublicKeys.default(), wallet, BlackJackContractArtifact, BlackJackContract.at, Array.from(arguments).slice(1));
   }
 
   /**
    * Creates a tx to deploy a new instance of this contract using the specified public keys hash to derive the address.
    */
-  public static deployWithPublicKeys(publicKeys: PublicKeys, wallet: Wallet, player: AztecAddressLike) {
+  public static deployWithPublicKeys(publicKeys: PublicKeys, wallet: Wallet, ) {
     return new DeployMethod<BlackJackContract>(publicKeys, wallet, BlackJackContractArtifact, BlackJackContract.at, Array.from(arguments).slice(2));
   }
 
@@ -108,53 +108,101 @@ export class BlackJackContract extends ContractBase {
   }
   
 
-  public static get storage(): ContractStorageLayout<'card_deck' | 'player_hands' | 'dealer_hand'> {
+  public static get storage(): ContractStorageLayout<'player_address' | 'card_deck_used' | 'player_hand' | 'dealer_hand' | 'player_bust' | 'dealer_bust' | 'bets' | 'insurance'> {
       return {
-        card_deck: {
+        player_address: {
       slot: new Fr(1n),
     },
-player_hands: {
-      slot: new Fr(53n),
+card_deck_used: {
+      slot: new Fr(2n),
+    },
+player_hand: {
+      slot: new Fr(3n),
     },
 dealer_hand: {
-      slot: new Fr(54n),
+      slot: new Fr(4n),
+    },
+player_bust: {
+      slot: new Fr(5n),
+    },
+dealer_bust: {
+      slot: new Fr(6n),
+    },
+bets: {
+      slot: new Fr(7n),
+    },
+insurance: {
+      slot: new Fr(8n),
     }
-      } as ContractStorageLayout<'card_deck' | 'player_hands' | 'dealer_hand'>;
+      } as ContractStorageLayout<'player_address' | 'card_deck_used' | 'player_hand' | 'dealer_hand' | 'player_bust' | 'dealer_bust' | 'bets' | 'insurance'>;
     }
     
 
-  public static get notes(): ContractNotes<'ValueNote'> {
+  public static get notes(): ContractNotes<'AddressNote' | 'TransparentNote' | 'UintNote' | 'CardNote' | 'ValueNote'> {
     return {
-      ValueNote: {
+      AddressNote: {
+          id: new NoteSelector(2232136525),
+        },
+TransparentNote: {
+          id: new NoteSelector(3193649735),
+        },
+UintNote: {
+          id: new NoteSelector(202136239),
+        },
+CardNote: {
+          id: new NoteSelector(3719046069),
+        },
+ValueNote: {
           id: new NoteSelector(1038582377),
         }
-    } as ContractNotes<'ValueNote'>;
+    } as ContractNotes<'AddressNote' | 'TransparentNote' | 'UintNote' | 'CardNote' | 'ValueNote'>;
   }
   
 
   /** Type-safe wrappers for the public methods exposed by the contract. */
   public declare methods: {
     
-    /** begin_game(player: struct) */
-    begin_game: ((player: AztecAddressLike) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
+    /** begin_game() */
+    begin_game: (() => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
 
     /** compute_note_hash_and_optionally_a_nullifier(contract_address: struct, nonce: field, storage_slot: field, note_type_id: field, compute_nullifier: boolean, serialized_note: array) */
     compute_note_hash_and_optionally_a_nullifier: ((contract_address: AztecAddressLike, nonce: FieldLike, storage_slot: FieldLike, note_type_id: FieldLike, compute_nullifier: boolean, serialized_note: FieldLike[]) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
 
-    /** constructor(player: struct) */
-    constructor: ((player: AztecAddressLike) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
+    /** constructor() */
+    constructor: (() => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
 
-    /** dealer_hand() */
-    dealer_hand: (() => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
+    /** contract_address() */
+    contract_address: (() => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
 
-    /** player_hand(player: struct) */
-    player_hand: ((player: AztecAddressLike) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
+    /** dealer_points() */
+    dealer_points: (() => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
+
+    /** double_down(token: struct) */
+    double_down: ((token: AztecAddressLike) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
+
+    /** is_dealer_bust_view() */
+    is_dealer_bust_view: (() => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
+
+    /** is_player_bust_view() */
+    is_player_bust_view: (() => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
+
+    /** make_bet(bet: field, token: struct) */
+    make_bet: ((bet: FieldLike, token: AztecAddressLike) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
+
+    /** place_insurance_bet(insurance_bet: field, token: struct) */
+    place_insurance_bet: ((insurance_bet: FieldLike, token: AztecAddressLike) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
+
+    /** player_hit() */
+    player_hit: (() => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
+
+    /** player_points(player: struct) */
+    player_points: ((player: AztecAddressLike) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
+
+    /** player_stand() */
+    player_stand: (() => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
 
     /** public_dispatch(selector: field) */
     public_dispatch: ((selector: FieldLike) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
-
-    /** view_deck() */
-    view_deck: (() => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
   };
 
   

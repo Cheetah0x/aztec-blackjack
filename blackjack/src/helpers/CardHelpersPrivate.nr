@@ -75,14 +75,16 @@ fn draw_until_seventeen(
     location: PrivateSet<CardNote, &mut PrivateContext>,
 ) -> u8 {
     let mut new_dealer_points = dealer_points;
-    for i in 0..4 {
-        if dealer_points < 17 & new_dealer_points < 17 {
-            // Draw a card
-            draw_card(player, location, context);
-            // Recalculate dealer points
-            new_dealer_points = card_points(location);
-        }
+    // for _ in 0..3 {
+    //loop not working, so just do it manually, 3 times should be enough for now.
+    //not even working manually
+    if new_dealer_points < 17 {
+        // Draw a card
+        draw_card(player, location, context);
+        // Recalculate dealer points
+        new_dealer_points = card_points(location);
     }
+    // // could make this card points more efficient to only get the last note, instead of all
     new_dealer_points as u8
 }
 

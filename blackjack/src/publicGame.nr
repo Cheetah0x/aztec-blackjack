@@ -17,7 +17,7 @@
 // Player can get insurance if dealer might have a BlackJack.
 
 // Aces are high unless card total is already greater than 11.
-
+ 
 // Blackjack payout is 3:2.
 
 // No surrender.
