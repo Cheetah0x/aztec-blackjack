@@ -18,7 +18,7 @@ import {
   TokenContractArtifact,
   TokenContract,
 } from "../src/circuits/src/artifacts/Token";
-import { setupSandbox, createAccount } from "./utils";
+import { setupSandbox, createAccount, retryWithDelay } from "./utils";
 
 describe("BlackJack Priv", () => {
   let pxe: PXE;
@@ -157,6 +157,18 @@ describe("BlackJack Priv", () => {
     expect(contractBalancePub).toEqual(200n);
   });
 
+  it("send tokens to the player", async () => {
+    await playerBlackJackInstance.methods
+      .send_tokens_to_player(tokenAddress)
+      .send()
+      .wait();
+
+    const balance = await playerTokenInstance.methods
+      .balance_of_private(player)
+      .simulate();
+    console.log("Balance of the player", balance);
+  });
+
   //--------------------------CHECKING BLACKJACK CONTRACT WORKING-------------------
 
   //see if we can make a bet
@@ -254,11 +266,13 @@ describe("BlackJack Priv", () => {
 
   it("player stands", async () => {
     //now stand
-    const receipt = await playerBlackJackInstance.methods
-      .player_stand()
-      .send()
-      .wait({ debug: true });
-    console.log(receipt);
+    await retryWithDelay(async () => {
+      const receipt = await playerBlackJackInstance.methods
+        .player_stand()
+        .send()
+        .wait({ debug: true });
+      console.log(receipt);
+    });
 
     //check the totals
     const player_total = await playerBlackJackInstance.methods
@@ -272,6 +286,21 @@ describe("BlackJack Priv", () => {
     console.log("Dealer total", dealer_total);
 
     //get the hands
+    const player_hand = await playerBlackJackInstance.methods
+      .player_hand(player)
+      .simulate();
+    console.log("Player hand", player_hand);
+
+    const dealer_hand = await playerBlackJackInstance.methods
+      .dealer_hand()
+      .simulate();
+    console.log("Dealer hand", dealer_hand);
+  });
+
+  it("reset the game", async () => {
+    await playerBlackJackInstance.methods.reset_game().send().wait();
+
+    //check the player hand is empty
     const player_hand = await playerBlackJackInstance.methods
       .player_hand(player)
       .simulate();

@@ -32,3 +32,28 @@ export const createAccount = async (pxe: PXE) => {
   const wallet = await account.register(); // Returns AccountWalletWithSecretKey
   return wallet;
 };
+
+export function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+export async function retryWithDelay(
+  fn: () => Promise<any>,
+  maxRetries: number = 10,
+  delayMs: number = 3000
+): Promise<any> {
+  let attempt = 0;
+
+  // Retry the function until it succeeds or the max number of attempts is reached.
+  while (attempt < maxRetries) {
+    try {
+      return await fn(); // Attempt to execute the function.
+    } catch (error) {
+      console.log(`Attempt ${attempt + 1} failed. Retrying...`);
+      attempt++;
+      await delay(delayMs); // Wait before the next attempt.
+    }
+  }
+
+  // Throw an error if the function failed after max retries.
+  throw new Error(`Failed after ${maxRetries} attempts`);
+}

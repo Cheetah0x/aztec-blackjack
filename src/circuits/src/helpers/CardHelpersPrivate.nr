@@ -11,6 +11,7 @@ use dep::aztec::{
         PublicImmutable, PublicMutable,
     },
 };
+use dep::aztec::oracle::debug_log::{debug_log, debug_log_format};
 use dep::value_note::value_note::ValueNote;
 
 //drawing a card helper
@@ -23,12 +24,21 @@ fn draw_card(
     let player_keys = get_public_keys(player);
     let random_value = unsafe { random() };
     let value_bytes: [u8; 32] = random_value.to_le_bytes();
-    let rank = ((value_bytes[0] as u32) + (value_bytes[1] as u32) * 256) % 14;
-    let suit = ((value_bytes[2] as u32) + (value_bytes[3] as u32) * 256) % 4;
+    let rank = (((value_bytes[0] as u32) + (value_bytes[1] as u32) * 256) % 13) + 1;
+    debug_log_format("Initial rank: {0}", [rank as Field]);
 
-    let card_value = if rank > 10 { 10 } else { rank };
+    let suit = (((value_bytes[2] as u32) + (value_bytes[3] as u32) * 256) % 4) + 1;
 
-    let card: Card = Card { rank: card_value as u8, suit: suit as u8 };
+    // Convert to u8 first, then check the value
+    let rank_u8 = (rank as u8);
+    debug_log_format("rank_u8: {0}", [rank_u8 as Field]);
+
+    let card_value = if rank_u8 > 10 { 10 } else { rank_u8 };
+    debug_log_format("card_value: {}", [card_value as Field]);
+    assert(card_value <= 10, "Card value is greater than 10");
+
+    let card: Card = Card { rank: card_value, suit: suit as u8 };
+    debug_log_format("final card rank: {0}", [card.rank as Field]);
 
     let mut card_note = CardNote::new(card, player);
     location.insert(&mut card_note).emit(encode_and_encrypt_note(

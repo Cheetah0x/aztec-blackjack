@@ -108,7 +108,7 @@ export class BlackJackContract extends ContractBase {
   }
   
 
-  public static get storage(): ContractStorageLayout<'player_address' | 'card_deck_used' | 'player_hand' | 'dealer_hand' | 'player_bust' | 'dealer_bust' | 'blackjack' | 'bets' | 'insurance'> {
+  public static get storage(): ContractStorageLayout<'player_address' | 'card_deck_used' | 'player_hand' | 'dealer_hand' | 'player_bust' | 'dealer_bust' | 'blackjack' | 'bet' | 'insurance' | 'token'> {
       return {
         player_address: {
       slot: new Fr(1n),
@@ -131,13 +131,16 @@ dealer_bust: {
 blackjack: {
       slot: new Fr(7n),
     },
-bets: {
+bet: {
       slot: new Fr(8n),
     },
 insurance: {
       slot: new Fr(9n),
+    },
+token: {
+      slot: new Fr(10n),
     }
-      } as ContractStorageLayout<'player_address' | 'card_deck_used' | 'player_hand' | 'dealer_hand' | 'player_bust' | 'dealer_bust' | 'blackjack' | 'bets' | 'insurance'>;
+      } as ContractStorageLayout<'player_address' | 'card_deck_used' | 'player_hand' | 'dealer_hand' | 'player_bust' | 'dealer_bust' | 'blackjack' | 'bet' | 'insurance' | 'token'>;
     }
     
 
@@ -215,6 +218,12 @@ ValueNote: {
 
     /** public_dispatch(selector: field) */
     public_dispatch: ((selector: FieldLike) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
+
+    /** reset_game() */
+    reset_game: (() => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
+
+    /** send_tokens_to_player(token: struct) */
+    send_tokens_to_player: ((token: AztecAddressLike) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
   };
 
   

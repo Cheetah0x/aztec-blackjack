@@ -8,6 +8,36 @@ import ConnectAccountPopup from "../components/ConnectAccountPopup";
 import { useAztecAccount } from "../contexts/AztecAccountContext";
 import { AztecAddress } from "@aztec/aztec.js";
 
+import { createPXEClient  } from "@aztec/aztec.js";
+import { ShieldswapWalletSdk  } from "@shieldswap/wallet-sdk";
+
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+async function retryWithDelay(
+  fn: () => Promise<any>,
+  maxRetries: number = 10,
+  delayMs: number = 3000
+): Promise<any> {
+  let attempt = 0;
+
+  // Retry the function until it succeeds or the max number of attempts is reached.
+  while (attempt < maxRetries) {
+    try {
+      return await fn(); // Attempt to execute the function.
+    } catch (error) {
+      console.log(`Attempt ${attempt + 1} failed. Retrying...`);
+      attempt++;
+      await delay(delayMs); // Wait before the next attempt.
+    }
+  }
+
+  // Throw an error if the function failed after max retries.
+  throw new Error(`Failed after ${maxRetries} attempts`);
+}
+
+
 const suitSymbols = ["♠", "♥", "♦", "♣"];
 const rankSymbols: { [key: number]: string } = {
   1: "A",
@@ -50,15 +80,15 @@ interface ProcessedCard {
 
 export default function BlackjackGame() {
   const {
-    tokenInstance,
-    blackjackInstance,
+    wallet,
     tokenAddress,
     blackjackAddress,
-    deployTokenContract,
+    tokenInstance,
+    blackjackInstance,
     isLoading,
+    error,
   } = useAztecAccount();
 
-  const [wallet, setWallet] = useState<any>(null);
   const [playerHand, setPlayerHand] = useState<Card[]>([]);
   const [dealerHand, setDealerHand] = useState<Card[]>([]);
   const [gameState, setGameState] = useState("idle");
@@ -94,7 +124,7 @@ export default function BlackjackGame() {
           alert("You win!");
         } else if (playerPoints < dealerPoints) {
           alert("Dealer wins!");
-        } else {
+        } else if (playerPoints === dealerPoints) {
           alert("Push!");
         }
       }
@@ -102,32 +132,14 @@ export default function BlackjackGame() {
   }, [gameState]);
   
 
-  const initializeWallet = async () => {
-    if (!wallet) {
-      console.log("Initializing wallet...");
-      try {
-        const walletResult = await deployTokenContract(wallet); // Initialize wallet via Aztec
-        setWallet(walletResult);
-        console.log("Wallet initialized:", walletResult);
-      } catch (err) {
-        console.error("Error initializing wallet:", err);
-      }
-    }
-  };
 
-  useEffect(() => {
-    if (!secret) {
-      setIsPopupOpen(true);
-    } else {
-      initializeWallet();
-    }
-  }, [secret]);
 
-  const deployContracts = async (wallet: any) => {
+  const deployContracts = async () => {
     if (wallet) {
-      await deployTokenContract(wallet);
+      await deployContracts();
     }
   };
+  
 
   const updateBalances = async () => {
     if (!tokenInstance || !wallet) return;
@@ -249,20 +261,37 @@ export default function BlackjackGame() {
     try {
       if (!blackjackInstance) return;
       console.log("Player stands...");
+  
+      // Notify the contract that the player has chosen to stand
+      await retryWithDelay(async () => {
       const standTx = await blackjackInstance.methods
         .player_stand()
-        .send()
-        .wait();
+          .send()
+          .wait();
   
-      console.log("Player stand:", standTx);
+        console.log("Player stand transaction:", standTx);
+      });
   
+      // Update the game state to "dealer_turn"
+      setGameState("dealer_turn");
+  
+      // Update the dealer's hand to remove the hidden placeholder card
       await updateHands();
   
+      // Ensure all dealer cards are visible at the end of the game
+      setDealerHand((prevDealerHand) =>
+        prevDealerHand.map((card) => ({ ...card, hidden: false }))
+      );
+      await updateBalances();
+
+      // Finalize the game state
       setGameState("ended");
     } catch (err) {
       console.error("Error standing:", err);
     }
   };
+  
+  
 
   function processHandData(handRaw: CardData[]): ProcessedCard[] {
     // Filter out cards where both rank and suit are zero
@@ -337,10 +366,12 @@ export default function BlackjackGame() {
         .simulate();
       const dealerHandProcessed = processHandData(dealerHandRaw);
   
-      // Hide dealer's first card if the game is in 'playing' state
-      if (gameState === "playing" && dealerHandProcessed.length > 0) {
-        dealerHandProcessed[0].hidden = true;
+      // Add a placeholder card (hidden) during the initial "playing" state
+      if (gameState === "playing" && dealerHandProcessed.length === 1) {
+        dealerHandProcessed.push({ value: "?", suit: "", hidden: true });
       }
+  
+      // Update the dealer's hand
       setDealerHand(dealerHandProcessed);
   
       // Handle game state transitions
@@ -354,6 +385,7 @@ export default function BlackjackGame() {
   
   
   
+  
 
   const renderCard = (card: Card, index: number, isDealer = false) => (
     <motion.div
@@ -363,9 +395,7 @@ export default function BlackjackGame() {
       exit={{ opacity: 0, scale: 0.8, y: 50 }}
       transition={{ duration: 0.3 }}
       className={`absolute ${
-        card.hidden
-          ? "bg-primary text-primary-foreground"
-          : "bg-white text-black"
+        card.hidden ? "bg-primary text-primary-foreground" : "bg-white text-black"
       } w-16 h-24 rounded-lg shadow-lg flex items-center justify-center text-2xl font-bold border-2 border-border`}
       style={{ left: `${index * 30}px` }}
     >
@@ -373,15 +403,48 @@ export default function BlackjackGame() {
     </motion.div>
   );
   
+  
+
+  const resetGame = async () => {
+    try {
+      if (!blackjackInstance) return;
+      console.log("Resetting game...");
+      
+      const resetTx = await blackjackInstance.methods
+        .reset_game()
+        .send()
+        .wait();
+
+      console.log("Game reset:", resetTx);
+      
+      // Reset local state
+      setPlayerHand([]);
+      setDealerHand([]);
+      setGameState("idle");
+      setBet(0);
+      setPlayerPoints(0);
+      setDealerPoints(0);
+      setIsPlayerBust(false);
+      setIsDealerBust(false);
+      setIsBlackjack(false);
+      
+      // Update balances after reset
+      await updateBalances();
+    } catch (err) {
+      console.error("Error resetting game:", err);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-green-800 flex flex-col items-center justify-center p-4">
       <ConnectAccountPopup
-        isOpen={isPopupOpen}
-        onClose={() => setIsPopupOpen(false)}
-        onWalletGenerated={setWallet}
-        onSecretGenerated={(secret) => console.log("Secret generated:", secret)}
-      />
+      isOpen={isPopupOpen}
+      onClose={() => setIsPopupOpen(false)}
+      onWalletGenerated={(wallet) => {
+        deployContracts();
+      }}
+    />
+
             {tokenAddress ? (
         <div>
           <h2 className="text-white text-xl">Token Deployed</h2>
@@ -407,7 +470,7 @@ export default function BlackjackGame() {
         </div>
       ) : (
         <Button
-          onClick={() => deployContracts(wallet)}
+          onClick={() => deployContracts()}
           disabled={isLoading}
           className="bg-blue-500 text-white px-4 py-2 rounded"
         >
@@ -446,6 +509,11 @@ export default function BlackjackGame() {
               <Button onClick={stand} disabled={gameState !== "playing"}>
                 Stand
               </Button>
+              {gameState === "ended" && (
+                <Button onClick={resetGame} className="bg-purple-500 hover:bg-purple-600">
+                  Play Again
+                </Button>
+              )}
             </div>
             <div className="flex items-center space-x-2">
               <Button
