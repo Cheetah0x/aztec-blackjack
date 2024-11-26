@@ -141,7 +141,7 @@ token: {
     }
     
 
-  public static get notes(): ContractNotes<'AddressNote' | 'TransparentNote' | 'UintNote' | 'CardNote' | 'ValueNote'> {
+  public static get notes(): ContractNotes<'AddressNote' | 'TransparentNote' | 'UintNote' | 'ValueNote' | 'CardNote'> {
     return {
       AddressNote: {
           id: new NoteSelector(2232136525),
@@ -152,13 +152,13 @@ TransparentNote: {
 UintNote: {
           id: new NoteSelector(202136239),
         },
-CardNote: {
-          id: new NoteSelector(3719046069),
-        },
 ValueNote: {
           id: new NoteSelector(1038582377),
+        },
+CardNote: {
+          id: new NoteSelector(3719046069),
         }
-    } as ContractNotes<'AddressNote' | 'TransparentNote' | 'UintNote' | 'CardNote' | 'ValueNote'>;
+    } as ContractNotes<'AddressNote' | 'TransparentNote' | 'UintNote' | 'ValueNote' | 'CardNote'>;
   }
   
 

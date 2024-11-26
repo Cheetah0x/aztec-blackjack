@@ -18,7 +18,7 @@ import {
   TokenContractArtifact,
   TokenContract,
 } from "../src/circuits/src/artifacts/Token";
-import { setupSandbox, createAccount, retryWithDelay } from "./utils";
+import { setupSandbox, createAccount, retryWithDelay, delay } from "./utils";
 
 describe("BlackJack Priv", () => {
   let pxe: PXE;
@@ -140,10 +140,18 @@ describe("BlackJack Priv", () => {
     console.log("Sent to the contract", sendContractpub);
 
     //private balance is unconstrained, anyone can see it??
+    //this is something we cannot see as the contract is not an account
+    const filter = {
+      contractAddress: tokenAddress,
+      owner: player,
+    };
+    const outgoing = await pxe.getOutgoingNotes(filter);
+    console.log("Outgoing notes", outgoing);
     // const contractBalance = await playerTokenInstance.methods
     //   .balance_of_private(blackJackAddress)
     //   .simulate();
     // console.log("Contract balance", contractBalance);
+    //there should be notes the player can decrpyt right?
     // expect(contractBalance).toEqual(200n);
 
     //can assume that the private transfer worked too.
@@ -190,7 +198,7 @@ describe("BlackJack Priv", () => {
     // });
 
     // await playerWallet.addAuthWitness(authWitness);
-    // // await pxe.addAuthWitness(authWitness);
+    // await pxe.addAuthWitness(authWitness);
 
     //none of the authwit stuff here is working, will somehow have to constrain the function to only take
     //place if a bet is made. not sure how this can be checked atm.
@@ -215,26 +223,26 @@ describe("BlackJack Priv", () => {
       .dealer_points()
       .simulate();
 
-    console.log("Player cards", player_cards);
-    console.log("Dealer cards", dealer_cards);
+    console.log("Begins the game, Player cards", player_cards);
+    console.log("Begins the game, Dealer cards", dealer_cards);
 
     //get the hands
     const player_hand = await playerBlackJackInstance.methods
       .player_hand()
       .simulate();
-    console.log("Player hand", player_hand);
+    console.log("Begins the game, Player hand", player_hand);
 
     const dealer_hand = await playerBlackJackInstance.methods
       .dealer_hand()
       .simulate();
-    console.log("Dealer hand", dealer_hand);
+    console.log("Begins the game, Dealer hand", dealer_hand);
   });
 
   it("check if blackjack", async () => {
     const blackjack = await playerBlackJackInstance.methods
       .is_blackjack_view()
       .simulate();
-    console.log("Is blackjack?", blackjack);
+    console.log("Check if blackjack, Is blackjack?", blackjack);
   });
 
   it("player hits", async () => {
@@ -244,55 +252,60 @@ describe("BlackJack Priv", () => {
     let player_cards = await playerBlackJackInstance.methods
       .player_points()
       .simulate();
-    console.log("Player cards", player_cards);
+    console.log("Player hits, Player cards", player_cards);
 
     //check if the player has bust
     const is_bust = await playerBlackJackInstance.methods
       .is_player_bust_view()
       .simulate();
-    console.log("Is the player bust?", is_bust);
+    console.log("Player hits, Is the player bust?", is_bust);
 
     //get the hands
     const player_hand = await playerBlackJackInstance.methods
       .player_hand()
       .simulate();
-    console.log("Player hand", player_hand);
+    console.log("Player hits, Player hand", player_hand);
 
     const dealer_hand = await playerBlackJackInstance.methods
       .dealer_hand()
       .simulate();
-    console.log("Dealer hand", dealer_hand);
+    console.log("Player hits, Dealer hand", dealer_hand);
     // }
   });
 
   it("player stands", async () => {
     //now stand
-    // await retryWithDelay(async () => {
-    const receipt = await playerBlackJackInstance.methods.player_stand().send();
-    console.log(receipt);
-    // });
+    await retryWithDelay(async () => {
+      const receipt = await playerBlackJackInstance.methods
+        .player_stand()
+        .send()
+        .wait();
+      console.log(receipt);
+    });
+
+    await delay(1000);
 
     //check the totals
     const player_total = await playerBlackJackInstance.methods
       .player_points()
       .simulate();
-    console.log("Player total", player_total);
+    console.log("Player stands, Player total", player_total);
 
     const dealer_total = await playerBlackJackInstance.methods
       .dealer_points()
       .simulate();
-    console.log("Dealer total", dealer_total);
+    console.log("Dealer stands, Dealer total", dealer_total);
 
     //get the hands
     const player_hand = await playerBlackJackInstance.methods
       .player_hand()
       .simulate();
-    console.log("Player hand", player_hand);
+    console.log("Player stands, Player hand", player_hand);
 
     const dealer_hand = await playerBlackJackInstance.methods
       .dealer_hand()
       .simulate();
-    console.log("Dealer hand", dealer_hand);
+    console.log("Dealer stands, Dealer hand", dealer_hand);
   }, 100000);
 
   it("reset the game", async () => {
@@ -302,12 +315,12 @@ describe("BlackJack Priv", () => {
     const player_hand = await playerBlackJackInstance.methods
       .player_hand()
       .simulate();
-    console.log("Player hand", player_hand);
+    console.log("Reset game, Player hand", player_hand);
 
     const dealer_hand = await playerBlackJackInstance.methods
       .dealer_hand()
       .simulate();
-    console.log("Dealer hand", dealer_hand);
+    console.log("Reset game, Dealer hand", dealer_hand);
 
     expect(player_hand && dealer_hand).toEqual([
       { rank: 0n, suit: 0n },

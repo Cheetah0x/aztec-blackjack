@@ -81,8 +81,8 @@ contract BlackJack {
     #[view]
     fn get_bet() -> u64 {
         let player = context.msg_sender();
-        let bet = storage.bet.at(player).get_note();
-        bet.note.value as u64
+        let bet = storage.bet.at(player).get_note().note.value as u64;
+        bet
     }
 
     #[private]
@@ -302,85 +302,57 @@ contract BlackJack {
     //now i need to add the logic for the player standing and what happens with the dealer.
     #[private]
     fn player_stand() -> bool {
-        debug_log("Starting player_stand");
+        //1.Get the player and contract addresses
         let player = context.msg_sender();
         let contract_address = context.this_address();
 
-        //check the player has min 2 cards in their hand
+        //2. Check the player has at least 2 cards in their hand
         let player_hand = storage.player_hand.at(player);
         let player_cards = player_hand.get_notes(NoteGetterOptions::new());
         assert(player_cards.len() >= 2, "Player does not have 2 cards in their hand");
 
-        //dealer has at least 1 card in their hand
-        let dealer_hand = storage.dealer_hand.at(player);
-        let dealer_cards = dealer_hand.get_notes(NoteGetterOptions::new());
+        //3. Check the dealer has at least 1 card in their hand
+        let dealer_cards = storage.dealer_hand.at(player).get_notes(NoteGetterOptions::new());
         assert(dealer_cards.len() >= 1, "Dealer does not have 1 card in their hand");
 
-        debug_log_format("Player address: {0}", [player.to_field()]);
-        debug_log_format("Contract address: {0}", [contract_address.to_field()]);
-
-        // Check if bet notes exist before accessing
-        let bet = storage.bet.at(player).get_note().note.value as u64;
-        assert(bet > 0, "No bet notes found");
-
-        // Check if token notes exist before accessing
-        let token = storage.token.at(player).get_note().note.address;
-
-        let location = storage.dealer_hand.at(player);
-        let mut dealer_points = card_points(location);
-        debug_log_format("Initial dealer points: {0}", [dealer_points as Field]);
+        //4. Check if bet notes exist before accessing, will need a bet anyway for the payout
+        // let bet = storage.bet.at(player).get_note().note.value as u64;
+        // assert(bet > 0, "No bet notes found");
+        // 5. Get the token address, for the transfer later
+        // let token = storage.token.at(player).get_note().note.address;
+        //Get the current points for the dealer and the player
         let player_points = card_points(storage.player_hand.at(player));
-        debug_log_format("Player points: {0}", [player_points as Field]);
 
-        // for _ in 0..4 {
-        //     if dealer_points < 17 {
-        //         dealer_points =
-        //             draw_until_seventeen(dealer_points as u8, player, &mut context, location);
-        //     }
-        //     debug_log_format("Loop {_}", [_ as Field]);
-        // }
-        //write the logic
-        //this is calling the failure
-        // for i in 0..4 {
-        //     let mut previous_dealer_points = dealer_points;
-        //     if dealer_points < 17 {
-        //         draw_card(player, location, &mut context);
-        //         dealer_points = card_points(location);
-        //         debug_log_format("Dealer points: {0}", [dealer_points as Field]);
-        //         assert(dealer_points > previous_dealer_points, "Dealer points did not increase");
-        //     }
-        //     debug_log_format("Loop {_}", [i as Field]);
-        // }
-        //what if i only do it once?
-        dealer_points = draw_until_seventeen(dealer_points as u8, player, &mut context, location);
-        dealer_points = draw_until_seventeen(dealer_points as u8, player, &mut context, location);
-        debug_log("Ending dealer loop");
-        debug_log_format("Final dealer points: {0}", [dealer_points as Field]);
-        debug_log_format("Player points: {0}", [player_points as Field]);
+        draw_card(player, storage.dealer_hand.at(player), &mut context);
 
+        let mut dealer_points = card_points(storage.dealer_hand.at(player));
+
+        draw_until_seventeen(dealer_points, player, &mut context, storage.dealer_hand.at(player));
+        //ok this dead ass worked once, try again, failed the second time
+
+        // if dealer_points < 17 {
+        //     draw_card(player, storage.dealer_hand.at(player), &mut context);
+        //     dealer_points = card_points(storage.dealer_hand.at(player));
+        // }
+        //working with the one if statement, sometimes works with two, just super inconsistent
+   
         let mut bust = false;
+        let mut win = false;
         if dealer_points > 21 {
-            debug_log("Dealer bust!");
             bust = true;
             BlackJack::at(contract_address).is_dealer_bust(bust).enqueue(&mut context);
         }
-        let mut win = false;
         if player_points > 21 {
-            debug_log("Player bust!");
             win = false;
-        } else if dealer_points > player_points as u8 & dealer_points as u8 <= 21 {
-            debug_log("Dealer wins");
+        } else if dealer_points > player_points & dealer_points <= 21 {
             win = false;
-        } else if dealer_points == player_points as u8 {
-            debug_log("Push");
+        } else if dealer_points == player_points {
             // Token::at(token).transfer(player, bet).call(&mut context);
             win = false;
         } else {
-            debug_log("Player wins");
             // Token::at(token).transfer(player, 2 * bet).call(&mut context);
             win = true;
         }
-        debug_log_format("Returning win state: {0}", [win as Field]);
 
         win
     }
@@ -425,8 +397,9 @@ contract BlackJack {
         //ended, inprogress, waiting
         // Remove all cards from player's hand
         //need to also remove the token note
-        let player_location = storage.player_hand.at(player);
         let options = NoteGetterOptions::new();
+
+        let player_location = storage.player_hand.at(player);
         player_location.pop_notes(options);
 
         // Remove all cards from dealer's hand
@@ -434,8 +407,8 @@ contract BlackJack {
         dealer_location.pop_notes(options);
 
         //remove the bet
-        let bet_note = storage.bet.at(player).get_note().note;
-        destroy_note(&mut context, bet_note);
+        // let bet_note = storage.bet.at(player).get_note().note;
+        // destroy_note(&mut context, bet_note);
         //there needs a be a better option just to destroy the note
         // Reset game state flags
         let contract_address = context.this_address();

@@ -26,11 +26,28 @@ unconstrained fn playerStand() {
     env.impersonate(player);
 
     //make a bet
+    println("playerStand 1");
     let bet_amount = 10;
     BlackJack::at(blackjack_contract).make_bet(bet_amount, token_address).call(&mut env.private());
+
+    println("playerStand 2");
+    env.advance_block_by(1);
+    //check the bet is correct
+    // let bet = BlackJack::at(blackjack_contract).get_bet().view(&mut env.private());
+    // assert(bet.to_field() == bet_amount);
+    println("playerStand 3");
+    env.advance_block_by(1);
 
     //begin the game
     BlackJack::at(blackjack_contract).begin_game().call(&mut env.private());
 
+    println("playerStand 4");
     BlackJack::at(blackjack_contract).player_stand().call(&mut env.private());
+
+    println("playerStand 5");
+
+    //reset the game
+    BlackJack::at(blackjack_contract).reset_game().call(&mut env.private());
+    //checkpoint 6
 }
+

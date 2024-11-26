@@ -24,19 +24,19 @@ use dep::aztec::{
 #[derive(Serialize)]
 #[derive(Deserialize)]
 pub struct Card {
-    rank: u8,
-    suit: u8,
+    rank: u64,
+    suit: u64,
 }
 
 impl FromField for Card {
     fn from_field(field: Field) -> Card {
         let value_bytes: [u8; 32] = field.to_le_bytes();
-        let rank_raw = ((value_bytes[0] as u32) + (value_bytes[1] as u32) * 256) % 13 + 1; // Ranks from 1 to 13
-        let suit = ((value_bytes[2] as u32) + (value_bytes[3] as u32) * 256) % 4 + 1; // Suits from 1 to 4
+        let rank_raw = ((value_bytes[0] as u64) + (value_bytes[1] as u64) * 256) % 13 + 1; // Ranks from 1 to 13
+        let suit = ((value_bytes[2] as u64) + (value_bytes[3] as u64) * 256) % 4 + 1; // Suits from 1 to 4
         // Cap the rank at 10
-        let rank = if rank_raw > 10 { 10 } else { rank_raw } as u8;
+        let rank = if rank_raw > 10 { 10 } else { rank_raw } as u64;
 
-        Card { rank, suit: suit as u8 }
+        Card { rank, suit: suit as u64 }
     }
 }
 
@@ -52,8 +52,8 @@ impl Eq for Card {
     }
 }
 
-fn card_id(rank: u8, suit: u8) -> u8 {
-    (suit as u8) * 13 + (rank as u8) - 1 // Ranks from 1 to 13
+fn card_id(rank: u64, suit: u64) -> u64 {
+    (suit as u64) * 13 + (rank as u64) - 1 // Ranks from 1 to 13
 }
 
 //----------------------------DECK--------------------------------
