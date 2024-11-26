@@ -31,13 +31,14 @@ pub struct Card {
 impl FromField for Card {
     fn from_field(field: Field) -> Card {
         let value_bytes: [u8; 32] = field.to_le_bytes();
-        let rank = ((value_bytes[0] as u32) + (value_bytes[1] as u32) * 256) % 14;
-        let suit = ((value_bytes[2] as u32) + (value_bytes[3] as u32) * 256) % 4;
-        Card { rank: rank as u8, suit: suit as u8 }
+        let rank_raw = ((value_bytes[0] as u32) + (value_bytes[1] as u32) * 256) % 13 + 1; // Ranks from 1 to 13
+        let suit = ((value_bytes[2] as u32) + (value_bytes[3] as u32) * 256) % 4 + 1; // Suits from 1 to 4
+        // Cap the rank at 10
+        let rank = if rank_raw > 10 { 10 } else { rank_raw } as u8;
+
+        Card { rank, suit: suit as u8 }
     }
 }
-
-
 
 impl ToField for Card {
     fn to_field(self) -> Field {
@@ -166,14 +167,13 @@ impl CardNote {
      * @returns A new `CardNote` instance.
      */
     pub fn new(card: Card, owner: AztecAddress) -> Self {
-        //generate random rank and suit for the card
-        let rank = (unsafe { random() } as u32 % 13 + 1) as u8;
-        let suit = (unsafe { random() } as u32 % 4) as u8;
-        let card = Card { rank, suit };
+        // Ensure the card rank is capped at 10
+        let rank_capped = if card.rank > 10 { 10 } else { card.rank };
+        let card_capped = Card { rank: rank_capped, suit: card.suit };
 
         let randomness = unsafe { random() };
         let header = NoteHeader::empty();
-        CardNote { card, randomness, owner, header }
+        CardNote { card: card_capped, randomness, owner, header }
     }
 }
 
@@ -209,7 +209,5 @@ impl Deserialize<3> for CardNote {
     }
 }
 
-
 //----------------------------Game Actions--------------------------------
-
 

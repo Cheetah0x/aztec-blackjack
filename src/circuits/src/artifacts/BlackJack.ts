@@ -108,39 +108,36 @@ export class BlackJackContract extends ContractBase {
   }
   
 
-  public static get storage(): ContractStorageLayout<'player_address' | 'card_deck_used' | 'player_hand' | 'dealer_hand' | 'player_bust' | 'dealer_bust' | 'blackjack' | 'bet' | 'insurance' | 'token'> {
+  public static get storage(): ContractStorageLayout<'card_deck_used' | 'player_hand' | 'dealer_hand' | 'player_bust' | 'dealer_bust' | 'blackjack' | 'bet' | 'insurance' | 'token'> {
       return {
-        player_address: {
+        card_deck_used: {
       slot: new Fr(1n),
     },
-card_deck_used: {
+player_hand: {
       slot: new Fr(2n),
     },
-player_hand: {
+dealer_hand: {
       slot: new Fr(3n),
     },
-dealer_hand: {
+player_bust: {
       slot: new Fr(4n),
     },
-player_bust: {
+dealer_bust: {
       slot: new Fr(5n),
     },
-dealer_bust: {
+blackjack: {
       slot: new Fr(6n),
     },
-blackjack: {
+bet: {
       slot: new Fr(7n),
     },
-bet: {
+insurance: {
       slot: new Fr(8n),
     },
-insurance: {
-      slot: new Fr(9n),
-    },
 token: {
-      slot: new Fr(10n),
+      slot: new Fr(9n),
     }
-      } as ContractStorageLayout<'player_address' | 'card_deck_used' | 'player_hand' | 'dealer_hand' | 'player_bust' | 'dealer_bust' | 'blackjack' | 'bet' | 'insurance' | 'token'>;
+      } as ContractStorageLayout<'card_deck_used' | 'player_hand' | 'dealer_hand' | 'player_bust' | 'dealer_bust' | 'blackjack' | 'bet' | 'insurance' | 'token'>;
     }
     
 
@@ -189,6 +186,12 @@ ValueNote: {
     /** double_down(token: struct) */
     double_down: ((token: AztecAddressLike) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
 
+    /** get_bet() */
+    get_bet: (() => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
+
+    /** get_token() */
+    get_token: (() => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
+
     /** is_blackjack_view() */
     is_blackjack_view: (() => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
 
@@ -204,14 +207,14 @@ ValueNote: {
     /** place_insurance_bet(insurance_bet: field, token: struct) */
     place_insurance_bet: ((insurance_bet: FieldLike, token: AztecAddressLike) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
 
-    /** player_hand(player: struct) */
-    player_hand: ((player: AztecAddressLike) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
+    /** player_hand() */
+    player_hand: (() => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
 
     /** player_hit() */
     player_hit: (() => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
 
-    /** player_points(player: struct) */
-    player_points: ((player: AztecAddressLike) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
+    /** player_points() */
+    player_points: (() => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
 
     /** player_stand() */
     player_stand: (() => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
@@ -221,9 +224,6 @@ ValueNote: {
 
     /** reset_game() */
     reset_game: (() => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
-
-    /** send_tokens_to_player(token: struct) */
-    send_tokens_to_player: ((token: AztecAddressLike) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
   };
 
   

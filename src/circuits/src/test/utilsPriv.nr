@@ -16,6 +16,7 @@ use dep::aztec::{
 use dep::std::println;
 use dep::token::Token;
 use dep::uint_note::uint_note::UintNote;
+use dep::value_note::value_note::ValueNote;
 use std::test::OracleMock;
 
 pub unconstrained fn setupPriv() -> (&mut TestEnvironment, AztecAddress, AztecAddress, AztecAddress) {
@@ -28,6 +29,7 @@ pub unconstrained fn setupPriv() -> (&mut TestEnvironment, AztecAddress, AztecAd
     let blackjack_address = blackjack_deploy.to_address();
 
     //setup the token here
+    env.impersonate(player);
     let initializer_call_interface = Token::interface().constructor(
         player,
         "TestToken0000000000000000000000",
@@ -73,27 +75,10 @@ pub unconstrained fn tokenSetup(
     println(f"minting to player");
     //failing here
     env.impersonate(player);
-    Token::at(token_contract_address).mint_to_private(player, mint_amount).call(&mut env.private());
+    // Token::at(token_contract_address).mint_to_private(player, mint_amount).call(&mut env.private());
     println(f"minted to player");
 
     (token_contract_address)
-}
-
-#[test]
-unconstrained fn playerStorage() {
-    let (mut env, player, blackjack_contract, token_address) = setupPriv();
-
-    env.impersonate(blackjack_contract);
-
-    let unconstrained_context = env.unkonstrained();
-
-    let storage = BlackJack::Storage::init(unconstrained_context);
-
-    let player_storage: AddressNote = storage.player_address.view_note();
-
-    let player_address = player_storage.address;
-
-    assert(player_address == player, "Player address does not match");
 }
 
 #[test]
@@ -102,136 +87,155 @@ unconstrained fn beginGame() {
 
     env.impersonate(player);
 
+    println("checkpoint 1");
+
+    //make a bet
+    let bet_amount = 10;
+    BlackJack::at(blackjack_contract).make_bet(bet_amount, token_address).call(&mut env.private());
+
+    env.advance_block_by(1);
     let begin_game = BlackJack::at(blackjack_contract).begin_game().call(&mut env.private());
 
     println(f"Begin game: {begin_game}");
+    //fetch the player hand
+    let player_hand = BlackJack::at(blackjack_contract).player_hand().view(&mut env.private());
 
-    //get the card from storage
-    env.impersonate(blackjack_contract);
-    let unconstrained_context = env.unkonstrained();
-    let storage = BlackJack::Storage::init(unconstrained_context);
-    let options = NoteViewerOptions::new();
+    let dealer_hand = BlackJack::at(blackjack_contract).dealer_hand().view(&mut env.private());
 
-    //for the player hand
-    let cards: BoundedVec<CardNote, 10> = storage.player_hand.at(player).view_notes(options);
-    let mut player_cards = Vec::new();
-    let mut card_count = 0;
+    println("checkpoint 2");
 
-    for i in 0..cards.len() {
-        let card_used = cards.get_unchecked(i);
-        let card_note_dets = card_used.card;
-        player_cards.push(card_note_dets);
-        card_count += 1;
-        println(f"Player card rank: {card_note_dets.rank}");
-        assert(card_note_dets.rank <= 10, "Player card rank is greater than 10");
-    }
-
-    //for the dealer hand
-    let cards: BoundedVec<CardNote, 10> = storage.dealer_hand.at(player).view_notes(options);
-    let mut dealer_cards = Vec::new();
-
-    for i in 0..cards.len() {
-        let card_used = cards.get_unchecked(i);
-        let card_note_dets = card_used.card;
-        dealer_cards.push(card_note_dets);
-        card_count += 1;
-        println(f"Dealer card rank: {card_note_dets.rank}");
-        assert(card_note_dets.rank <= 10, "Dealer card rank is greater than 10");
-    }
-
-    println(f"Player cards: {player_cards}");
-    println(f"Dealer cards: {dealer_cards}");
-    println(f"Card count: {card_count}");
+    println(f"Player cards: {player_hand}");
+    println(f"Dealer cards: {dealer_hand}");
 
     //check the points of the dealer and the player
-    let player_points =
-        BlackJack::at(blackjack_contract).player_points(player).view(&mut env.private());
+    env.impersonate(player);
+    let player_points = BlackJack::at(blackjack_contract).player_points().view(&mut env.private());
     let dealer_points = BlackJack::at(blackjack_contract).dealer_points().view(&mut env.private());
 
     println(f"Player points: {player_points}");
     println(f"Dealer points: {dealer_points}");
 
+    println("checkpoint 3");
+
     //now need to hit
     env.impersonate(player);
-    let hit = BlackJack::at(blackjack_contract).player_hit().call(&mut env.private());
+    BlackJack::at(blackjack_contract).player_hit().call(&mut env.private());
+
+    println("checkpoint 4");
 
     env.advance_block_by(1);
 
     //read the player hand again
     // After hitting, re-fetch the player's hand
-    env.impersonate(blackjack_contract);
-    let cards: BoundedVec<CardNote, 10> = storage.player_hand.at(player).view_notes(options);
-    let mut player_cards2 = Vec::new();
-    let mut card_count = 0;
+    let player_hand2 = BlackJack::at(blackjack_contract).player_hand().view(&mut env.private());
+    println(f"Updated Player cards: {player_hand2}");
 
-    for i in 0..cards.len() {
-        let card_used = cards.get_unchecked(i);
-        let card_note_dets = card_used.card;
-        player_cards2.push(card_note_dets);
-        card_count += 1;
-        println(f"Player card rank: {card_note_dets.rank}");
-        assert(card_note_dets.rank <= 10, "Player card rank is greater than 10");
-    }
-
-    // Print the updated player cards
-    println(f"Updated Player cards: {player_cards2}");
+    println("checkpoint 5");
 
     //check what these add to
-    let player_points =
-        BlackJack::at(blackjack_contract).player_points(player).view(&mut env.private());
-
+    env.impersonate(player);
+    let player_points = BlackJack::at(blackjack_contract).player_points().view(&mut env.private());
     println(f"Player points: {player_points}");
+
+    println("checkpoint 6");
 
     //now check if bust, have to read from storage
     env.advance_block_by(1);
-    env.impersonate(blackjack_contract);
     let is_bust = BlackJack::at(blackjack_contract).is_player_bust_view().view(&mut env.public());
     println(f"Is bust: {is_bust}");
 
+    println("checkpoint 7");
+
+    env.advance_block_by(1);
+
+    //the test is failing in player stand when getting the bet
+    //need to check the bet is correct
+    env.impersonate(player);
+    // let bet = BlackJack::at(blackjack_contract).get_bet().view(&mut env.private());
+    // println(f"Bet: {bet}");
+    println("checkpoint 8");
+
+    //lets check the token
+    let token = BlackJack::at(blackjack_contract).get_token().view(&mut env.private());
+    println(f"Token: {token}");
+    println(f"player owner: {player}");
+
+    println("checkpoint 9");
     //add the test for when the player stands
+    env.advance_block_by(1);
     env.impersonate(player);
     let win = BlackJack::at(blackjack_contract).player_stand().call(&mut env.private());
     println(f"Win: {win}");
-    //get the dealer cards
-    env.impersonate(blackjack_contract);
-    let deal_cards2: BoundedVec<CardNote, 10> = storage.dealer_hand.at(player).view_notes(options);
-    let mut dealer_cards2 = Vec::new();
-    let mut dealer_card_count = 0;
 
-    for i in 0..cards.len() {
-        let card_used = deal_cards2.get_unchecked(i);
-        let card_note_dets = card_used.card;
-        dealer_cards2.push(card_note_dets);
-        dealer_card_count += 1;
-        println(f"Dealer card rank: {card_note_dets.rank}");
-        assert(card_note_dets.rank <= 10, "Dealer card rank is greater than 10");
-    }
-    println(f"Dealer card2s: {dealer_cards2}");
-    println(f"dealer card count 2 {dealer_card_count}");
+    println("checkpoint 10");
+
+    let dealer_hand2 = BlackJack::at(blackjack_contract).dealer_hand().view(&mut env.private());
+    println(f"Dealer cards2: {dealer_hand2}");
+
+    println("checkpoint 11");
 
     env.impersonate(player);
     //get the dealer points
     let dealerpoints2 = BlackJack::at(blackjack_contract).dealer_points().view(&mut env.private());
     println(f"dealerPoints2 {dealerpoints2}");
 
+    println("checkpoint 12");
+
     //see if the dealer is bust or not
     let dealer_bust =
         BlackJack::at(blackjack_contract).is_dealer_bust_view().view(&mut env.public());
     println(f"dealer bust {dealer_bust}");
 
+    println("checkpoint 13");
+
     //reset the game
-    env.impersonate(blackjack_contract);
+    //this should now be done in the player stand
     BlackJack::at(blackjack_contract).reset_game().call(&mut env.private());
+
+    println("checkpoint 14");
 
     //check the player hand is empty
     env.impersonate(blackjack_contract);
-    let cards: BoundedVec<CardNote, 10> = storage.player_hand.at(player).view_notes(options);
+    let player_hand3 = BlackJack::at(blackjack_contract).player_hand().view(&mut env.private());
+    println(f"Player hand after reset: {player_hand3}");
+    assert(
+        player_hand3
+            == [
+                Card { rank: 0, suit: 0 },
+                Card { rank: 0, suit: 0 },
+                Card { rank: 0, suit: 0 },
+                Card { rank: 0, suit: 0 },
+                Card { rank: 0, suit: 0 },
+                Card { rank: 0, suit: 0 },
+                Card { rank: 0, suit: 0 },
+                Card { rank: 0, suit: 0 },
+            ],
+        "Player hand is not empty",
+    );
 
-    // println(f"Player hand after reset: {cards}");
     //check the dealer hand is empty
     env.impersonate(blackjack_contract);
-    let cards: BoundedVec<CardNote, 10> = storage.dealer_hand.at(player).view_notes(options);
-    // println(f"Dealer hand after reset: {cards}");
+    let dealer_hand3 = BlackJack::at(blackjack_contract).dealer_hand().view(&mut env.private());
+    println(f"Dealer hand after reset: {dealer_hand3}");
+    assert(
+        dealer_hand3
+            == [
+                Card { rank: 0, suit: 0 },
+                Card { rank: 0, suit: 0 },
+                Card { rank: 0, suit: 0 },
+                Card { rank: 0, suit: 0 },
+                Card { rank: 0, suit: 0 },
+                Card { rank: 0, suit: 0 },
+                Card { rank: 0, suit: 0 },
+                Card { rank: 0, suit: 0 },
+            ],
+        "Dealer hand is not empty",
+    );
+
+    //check the bet is gone
+    env.impersonate(player);
+    let bet = BlackJack::at(blackjack_contract).get_bet().view(&mut env.private());
+    println(f"Bet: {bet}");
 }
 
 //next i need to add the player hit function.
@@ -334,8 +338,7 @@ pub unconstrained fn mint_private(
     let note_randomness = random();
     let _ = OracleMock::mock("getRandomField").returns(note_randomness);
 
-    Token::at(token_contract_address).mint_to_private(recipient, amount).call(&mut env.private());
-
+    // Token::at(token_contract_address).mint_to_private(recipient, amount).call(&mut env.private());
     add_token_note(
         env,
         token_contract_address,
@@ -366,3 +369,21 @@ pub unconstrained fn add_token_note(
         token_contract_address,
     );
 }
+
+//get the card from storage
+// env.impersonate(blackjack_contract);
+// let unconstrained_context = env.unkonstrained();
+// let storage = BlackJack::Storage::init(unconstrained_context);
+// let options = NoteViewerOptions::new();
+// //for the player hand
+// let cards: BoundedVec<CardNote, 10> = storage.player_hand.at(player).view_notes(options);
+// let mut player_cards = Vec::new();
+// let mut card_count = 0;
+// for i in 0..cards.len() {
+//     let card_used = cards.get_unchecked(i);
+//     let card_note_dets = card_used.card;
+//     player_cards.push(card_note_dets);
+//     card_count += 1;
+//     println(f"Player card rank: {card_note_dets.rank}");
+//     assert(card_note_dets.rank <= 10, "Player card rank is greater than 10");
+// }

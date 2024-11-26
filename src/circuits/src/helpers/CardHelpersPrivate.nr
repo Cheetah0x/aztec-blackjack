@@ -25,20 +25,16 @@ fn draw_card(
     let random_value = unsafe { random() };
     let value_bytes: [u8; 32] = random_value.to_le_bytes();
     let rank = (((value_bytes[0] as u32) + (value_bytes[1] as u32) * 256) % 13) + 1;
-    debug_log_format("Initial rank: {0}", [rank as Field]);
 
     let suit = (((value_bytes[2] as u32) + (value_bytes[3] as u32) * 256) % 4) + 1;
 
     // Convert to u8 first, then check the value
     let rank_u8 = (rank as u8);
-    debug_log_format("rank_u8: {0}", [rank_u8 as Field]);
 
     let card_value = if rank_u8 > 10 { 10 } else { rank_u8 };
-    debug_log_format("card_value: {}", [card_value as Field]);
     assert(card_value <= 10, "Card value is greater than 10");
 
     let card: Card = Card { rank: card_value, suit: suit as u8 };
-    debug_log_format("final card rank: {0}", [card.rank as Field]);
 
     let mut card_note = CardNote::new(card, player);
     location.insert(&mut card_note).emit(encode_and_encrypt_note(
@@ -60,11 +56,12 @@ fn card_points(location: PrivateSet<CardNote, &mut PrivateContext>) -> u8 {
         if i < cards.len() {
             let note = cards.get_unchecked(i);
             let card = note.card;
-            if card.rank == 1 {
+            let rank_value = if card.rank > 10 { 10 } else { card.rank };
+            if rank_value == 1 {
                 aces += 1;
                 points += 11; // Assume Ace is high initially
             } else {
-                points += card.rank;
+                points += rank_value;
             }
         }
     }
@@ -85,14 +82,16 @@ fn draw_until_seventeen(
     location: PrivateSet<CardNote, &mut PrivateContext>,
 ) -> u8 {
     let mut new_dealer_points = dealer_points;
+    let mut previous_points = dealer_points;
     // for _ in 0..3 {
-    //loop not working, so just do it manually, 3 times should be enough for now.
+    //loop not working, so just do it manually, 4 times should be enough for now.
     //not even working manually
     if new_dealer_points < 17 {
         // Draw a card
         draw_card(player, location, context);
         // Recalculate dealer points
         new_dealer_points = card_points(location);
+        assert(new_dealer_points > previous_points, "Dealer points did not increase");
     }
     // // could make this card points more efficient to only get the last note, instead of all
     new_dealer_points as u8
