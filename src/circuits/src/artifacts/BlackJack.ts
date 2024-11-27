@@ -141,13 +141,10 @@ token: {
     }
     
 
-  public static get notes(): ContractNotes<'AddressNote' | 'TransparentNote' | 'UintNote' | 'ValueNote' | 'CardNote'> {
+  public static get notes(): ContractNotes<'AddressNote' | 'UintNote' | 'ValueNote' | 'CardNote'> {
     return {
       AddressNote: {
           id: new NoteSelector(2232136525),
-        },
-TransparentNote: {
-          id: new NoteSelector(3193649735),
         },
 UintNote: {
           id: new NoteSelector(202136239),
@@ -158,7 +155,7 @@ ValueNote: {
 CardNote: {
           id: new NoteSelector(3719046069),
         }
-    } as ContractNotes<'AddressNote' | 'TransparentNote' | 'UintNote' | 'ValueNote' | 'CardNote'>;
+    } as ContractNotes<'AddressNote' | 'UintNote' | 'ValueNote' | 'CardNote'>;
   }
   
 
@@ -224,6 +221,9 @@ CardNote: {
 
     /** reset_game() */
     reset_game: (() => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
+
+    /** sync_notes() */
+    sync_notes: (() => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
   };
 
   

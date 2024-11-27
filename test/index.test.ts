@@ -98,13 +98,13 @@ describe("BlackJack Priv", () => {
 
   it("mint to the player", async () => {
     const mintpriv = await playerTokenInstance.methods
-      .mint_to_private(player, 1000)
+      .mint_to_private(player, player, 1000)
       .send()
       .wait();
     console.log("Minted to the player", mintpriv);
 
     const mintpub = await playerTokenInstance.methods
-      .mint_public(player, 500)
+      .mint_to_public(player, 500)
       .send()
       .wait();
     console.log("Minted to the player", mintpub);
@@ -134,19 +134,23 @@ describe("BlackJack Priv", () => {
     console.log("playerAddress", player);
 
     const sendContractpub = await playerTokenInstance.methods
-      .transfer_public(player, blackJackAddress, 200, 0)
+      .transfer_in_public(player, blackJackAddress, 200, 0)
       .send()
       .wait();
     console.log("Sent to the contract", sendContractpub);
 
     //private balance is unconstrained, anyone can see it??
     //this is something we cannot see as the contract is not an account
-    const filter = {
-      contractAddress: tokenAddress,
-      owner: player,
-    };
-    const outgoing = await pxe.getOutgoingNotes(filter);
-    console.log("Outgoing notes", outgoing);
+    // const filter = {
+    //   contractAddress: tokenAddress,
+    //   owner: player,
+    // };
+    // const outgoing = await pxe.getOutgoingNotes(filter);
+    // const value1 = outgoing[0].note.items.values;
+    // const value2 = outgoing[1].note.items.values;
+    // console.log("Outgoing notes", outgoing);
+    // console.log("Value1", value1);
+    // console.log("Value2", value2);
     // const contractBalance = await playerTokenInstance.methods
     //   .balance_of_private(blackJackAddress)
     //   .simulate();

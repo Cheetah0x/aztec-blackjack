@@ -45,11 +45,11 @@ contract BlackJack {
     };
     use dep::aztec::{
         context::{PrivateContext, PublicContext},
-        encrypted_logs::encrypted_note_emission::encode_and_encrypt_note,
-        keys::getters::get_public_keys,
+        encrypted_logs::encrypted_note_emission::{
+            encode_and_encrypt_note, encode_and_encrypt_note_unconstrained,
+        }, keys::getters::get_public_keys,
         macros::{functions::{initializer, internal, private, public, view}, storage::storage},
-        note::lifecycle::destroy_note,
-        oracle::random::random,
+        note::lifecycle::destroy_note, oracle::random::random,
         prelude::{
             AztecAddress, FunctionSelector, Map, NoteGetterOptions, PrivateImmutable,
             PrivateMutable, PrivateSet, PublicImmutable, PublicMutable,
@@ -327,15 +327,17 @@ contract BlackJack {
 
         let mut dealer_points = card_points(storage.dealer_hand.at(player));
 
-        draw_until_seventeen(dealer_points, player, &mut context, storage.dealer_hand.at(player));
+        // draw_until_seventeen(dealer_points, player, &mut context, storage.dealer_hand.at(player));
         //ok this dead ass worked once, try again, failed the second time
-
+        if dealer_points < 17 {
+            draw_card(player, storage.dealer_hand.at(player), &mut context);
+            dealer_points = card_points(storage.dealer_hand.at(player));
+        }
         // if dealer_points < 17 {
         //     draw_card(player, storage.dealer_hand.at(player), &mut context);
         //     dealer_points = card_points(storage.dealer_hand.at(player));
         // }
         //working with the one if statement, sometimes works with two, just super inconsistent
-   
         let mut bust = false;
         let mut win = false;
         if dealer_points > 21 {

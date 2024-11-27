@@ -169,14 +169,14 @@ export default function BlackjackGame() {
       try {
         console.log("Minting tokens...");
         const player = await wallet.getAddress();
-        const mintTx = await tokenInstance.methods.mint_to_private(player, 1000).send().wait();
-        const mintPubTx = await tokenInstance.methods.mint_public(player, 1000).send().wait();
+        const mintTx = await tokenInstance.methods.mint_to_private(player, player, 1000).send().wait();
+        const mintPubTx = await tokenInstance.methods.mint_to_public(player, 1000).send().wait();
         console.log("Minted 1000 tokens to player:", mintTx);
         console.log("Minted 1000 tokens to player:", mintPubTx);
 
         const sendContractpriv = await tokenInstance.methods.transfer(AztecAddress.fromString(blackjackAddress), 200).send().wait();
         console.log("Sent 200 tokens to blackjack contract:", sendContractpriv);
-        const sendContractpub = await tokenInstance.methods.transfer_public(player, AztecAddress.fromString(blackjackAddress), 200, 0).send().wait();
+        const sendContractpub = await tokenInstance.methods.transfer_in_public(player, AztecAddress.fromString(blackjackAddress), 200, 0).send().wait();
         console.log("Sent 200 tokens to blackjack contract:", sendContractpub);
         await updateBalances();
       } catch (err) {
@@ -191,11 +191,15 @@ export default function BlackjackGame() {
     try {
       const player = await wallet.getAddress();
       const transferTx = await tokenInstance.methods
-        .transfer_public(player, AztecAddress.fromString(blackjackAddress), bet, 0)
+        .transfer_in_public(player, AztecAddress.fromString(blackjackAddress), bet, 0)
         .send()
         .wait();
       console.log(`Transferred ${bet} tokens to blackjack contract:`, transferTx);
       await updateBalances();
+      if (blackjackInstance && tokenAddress) {
+        const makebet = await blackjackInstance.methods.make_bet(bet, AztecAddress.fromString(tokenAddress)).send().wait();
+        console.log("Made bet:", makebet);
+      }
     } catch (err) {
       console.error("Error placing bet:", err);
     }
@@ -294,16 +298,23 @@ export default function BlackjackGame() {
   
 
   function processHandData(handRaw: CardData[]): ProcessedCard[] {
-    // Filter out cards where both rank and suit are zero
+    const getFaceCard = () => {
+      const faces = ['J', 'Q', 'K'];
+      return faces[Math.floor(Math.random() * faces.length)];
+    };
+
     const filteredHand = handRaw.filter(
       (card: CardData) => !(card.rank === 0n && card.suit === 0n)
     );
   
     const processedHand = filteredHand.map((card: CardData) => {
       const rankNumber = Number(card.rank);
-      const suitNumber = Number(card.suit);
-      const rank = rankSymbols[rankNumber];
-      const suit = suitSymbols[suitNumber];
+      const suitNumber = Number(card.suit) % 4 ;
+      
+      // Randomly select face card if rank is 10
+      const rank = rankNumber === 10 ? getFaceCard() : (rankSymbols[rankNumber] || rankNumber.toString());
+      const suit = suitSymbols[suitNumber] || '?';
+      
       return {
         value: rank,
         suit: suit,
@@ -325,39 +336,45 @@ export default function BlackjackGame() {
   
       // Get player's points
       const playerPointsValue = await blackjackInstance.methods
-        .player_points(player)
+        .player_points()
         .simulate();
+      console.log("Player points:", playerPointsValue);
       setPlayerPoints(Number(playerPointsValue));
   
       // Get dealer's points
       const dealerPointsValue = await blackjackInstance.methods
         .dealer_points()
         .simulate();
+      console.log("Dealer points:", dealerPointsValue);
       setDealerPoints(Number(dealerPointsValue));
   
       // Get player's bust status
       const isPlayerBustValue = await blackjackInstance.methods
         .is_player_bust_view()
         .simulate();
+      console.log("Is player bust:", isPlayerBustValue);
       setIsPlayerBust(isPlayerBustValue);
   
       // Get dealer's bust status
       const isDealerBustValue = await blackjackInstance.methods
         .is_dealer_bust_view()
         .simulate();
+      console.log("Is dealer bust:", isDealerBustValue);
       setIsDealerBust(isDealerBustValue);
   
       // Get if blackjack
       const isBlackjackValue = await blackjackInstance.methods
         .is_blackjack_view()
         .simulate();
+      console.log("Is blackjack:", isBlackjackValue);
       setIsBlackjack(isBlackjackValue);
   
       // Fetch player's hand
       const playerHandRaw: CardData[] = await blackjackInstance.methods
-        .player_hand(player)
+        .player_hand()
         .simulate();
       const playerHandProcessed = processHandData(playerHandRaw);
+      console.log("playerhandprocessed", playerHandProcessed);
       setPlayerHand(playerHandProcessed);
   
       // Fetch dealer's hand
@@ -365,7 +382,7 @@ export default function BlackjackGame() {
         .dealer_hand()
         .simulate();
       const dealerHandProcessed = processHandData(dealerHandRaw);
-  
+      console.log("dealerhandprocessed", dealerHandProcessed);
       // Add a placeholder card (hidden) during the initial "playing" state
       if (gameState === "playing" && dealerHandProcessed.length === 1) {
         dealerHandProcessed.push({ value: "?", suit: "", hidden: true });
