@@ -58,6 +58,7 @@ contract BlackJack {
     use dep::aztec::oracle::debug_log::{debug_log, debug_log_format};
     use dep::token::Token;
     use dep::value_note::value_note::ValueNote;
+    use aztec::note::note_viewer_options::NoteViewerOptions;
 
     global ZERO_ADDRESS: AztecAddress = AztecAddress::from_field(
         0x0000000000000000000000000000000000000000000000000000000000000000,
@@ -102,8 +103,7 @@ contract BlackJack {
     #[view]
     fn player_points() -> u8 {
         let player = context.msg_sender();
-        let location = storage.player_hand.at(player);
-        let points = card_points(location);
+        let points = get_player_points(player);
         points as u8
     }
 
@@ -147,8 +147,7 @@ contract BlackJack {
     #[view]
     fn dealer_points() -> u8 {
         let player_address = context.msg_sender();
-        let location = storage.dealer_hand.at(player_address);
-        let points = card_points(location);
+        let points = get_dealer_points(player_address);
         points as u8
     }
 
@@ -274,7 +273,7 @@ contract BlackJack {
         let player_cards = player_hand.get_notes(NoteGetterOptions::new());
         assert(player_cards.len() == 2, "Player does not have 2 cards in their hand");
 
-        let points = card_points(storage.player_hand.at(player));
+        let points = get_player_points(player);
         //can have the bust state internal here, will have to update it at somepoint
         let mut bust = false;
         if points > 21 {
@@ -288,7 +287,7 @@ contract BlackJack {
         }
 
         //get the new points
-        let points = card_points(storage.player_hand.at(player));
+        let points = get_player_points(player);
 
         //can have the bust state internal here, will have to update it at somepoint
         let mut bust = false;
@@ -320,17 +319,17 @@ contract BlackJack {
         // 5. Get the token address, for the transfer later
         // let token = storage.token.at(player).get_note().note.address;
         //Get the current points for the dealer and the player
-        let player_points = card_points(storage.player_hand.at(player));
+        let player_points = get_player_points(player);
 
         draw_card(player, storage.dealer_hand.at(player), &mut context);
 
-        let mut dealer_points = card_points(storage.dealer_hand.at(player));
+        let mut dealer_points = get_dealer_points(player);
 
         // draw_until_seventeen(dealer_points, player, &mut context, storage.dealer_hand.at(player));
         //ok this dead ass worked once, try again, failed the second time
         if dealer_points < 17 {
             draw_card(player, storage.dealer_hand.at(player), &mut context);
-            dealer_points = card_points(storage.dealer_hand.at(player));
+            dealer_points = get_dealer_points(player);
         }
         // if dealer_points < 17 {
         //     draw_card(player, storage.dealer_hand.at(player), &mut context);
@@ -366,8 +365,7 @@ contract BlackJack {
         let player = context.msg_sender();
         let contract_address = context.this_address();
         let player_keys = get_public_keys(player);
-        let location = storage.player_hand.at(player);
-        let player_points = card_points(location);
+        let player_points = get_player_points(player);
         if (player_points < 9) {
             assert(false, "Player can only double down on 9,10 or 11");
         }
@@ -452,6 +450,68 @@ contract BlackJack {
     fn winner(winner: AztecAddress) {
         let player = context.msg_sender();
         storage.winner.at(player).write(winner)
+    }
+
+    #[internal]
+    unconstrained fn get_player_points(player: AztecAddress) -> pub u64 {
+        let options = NoteViewerOptions::new();
+        let location = storage.player_hand.at(player);
+        let cards = location.view_notes(options);
+        let mut points = 0;
+        let mut aces = 0;
+
+        for i in 0..cards.max_len() {
+            if i < cards.len() {
+                let note = cards.get_unchecked(i);
+                let card = note.card;
+                let rank_value = if card.rank > 10 { 10 } else { card.rank };
+                if rank_value == 1 {
+                    aces += 1;
+                    points += 11; // Assume Ace is high initially
+                } else {
+                    points += rank_value;
+                }
+            }
+        }
+
+        // Adjust for Aces if points exceed 21
+        if points > 21 & aces > 0 {
+            points -= 10; // Make Ace low
+            aces -= 1;
+        }
+
+        points as u64
+    }
+
+    #[internal]
+    unconstrained fn get_dealer_points(player: AztecAddress) -> pub u64 {
+        let options = NoteViewerOptions::new();
+        let location = storage.player_hand.at(player);
+        let cards = location.view_notes(options);
+        let mut points = 0;
+        let mut aces = 0;
+
+        for i in 0..cards.max_len() {
+            if i < cards.len() {
+                let note = cards.get_unchecked(i);
+                let card = note.card;
+                let rank_value = if card.rank > 10 { 10 } else { card.rank };
+                if rank_value == 1 {
+                    aces += 1;
+                    points += 11; // Assume Ace is high initially
+                } else {
+                    points += rank_value;
+                }
+            }
+        }
+
+        // Adjust for Aces if points exceed 21
+        if points > 21 & aces > 0 {
+            points -= 10; // Make Ace low
+            aces -= 1;
+        }
+
+        points as u64
     }
 }
 

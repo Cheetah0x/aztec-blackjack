@@ -1,20 +1,14 @@
 use dep::aztec::{
-    context::PrivateContext,
-    encrypted_logs::encrypted_note_emission::encode_and_encrypt_note,
-    keys::getters::{get_nsk_app, get_public_keys},
-    macros::notes::note,
+    context::PrivateContext, encrypted_logs::encrypted_note_emission::encode_and_encrypt_note,
+    keys::getters::{get_nsk_app, get_public_keys}, macros::notes::note,
     note::{
         note_header::NoteHeader, note_interface::NullifiableNote,
         utils::compute_note_hash_for_nullify,
-    },
-    oracle::random::random,
+    }, oracle::random::random,
     protocol_types::{
-        address::AztecAddress,
-        constants::GENERATOR_INDEX__NOTE_NULLIFIER,
-        hash::poseidon2_hash_with_separator,
-        traits::{Deserialize, FromField, Serialize, ToField},
-    },
-    state_vars::PrivateSet,
+        address::AztecAddress, constants::GENERATOR_INDEX__NOTE_NULLIFIER,
+        hash::poseidon2_hash_with_separator, traits::{Deserialize, FromField, Serialize, ToField},
+    }, state_vars::PrivateSet,
 };
 
 // Custom Address Note implementation, as the default one lacks serialization and the Eq trait.
@@ -50,10 +44,6 @@ impl Eq for Card {
     fn eq(self, other: Self) -> bool {
         (self.rank == other.rank) & (self.suit == other.suit)
     }
-}
-
-fn card_id(rank: u64, suit: u64) -> u64 {
-    (suit as u64) * 13 + (rank as u64) - 1 // Ranks from 1 to 13
 }
 
 //----------------------------DECK--------------------------------
@@ -103,6 +93,7 @@ impl Deck {
 //---------------------------CARD NOTE--------------------------------
 
 #[note]
+#[derive(Serialize, Deserialize)]
 struct CardNote {
     card: Card, // The card with the value and suit in the hand
     // The nullifying public key hash is used with the nsk_app to ensure that the note can be privately spent.
@@ -192,22 +183,22 @@ impl Eq for CardNote {
     }
 }
 
-impl Serialize<3> for CardNote {
-    fn serialize(self) -> [Field; 3] {
-        [self.card.to_field(), self.randomness, self.owner.to_field()]
-    }
-}
+// impl Serialize<3> for CardNote {
+//     fn serialize(self) -> [Field; 3] {
+//         [self.card.to_field(), self.randomness, self.owner.to_field()]
+//     }
+// }
 
-impl Deserialize<3> for CardNote {
-    fn deserialize(fields: [Field; 3]) -> Self {
-        CardNote {
-            card: Card::from_field(fields[0]),
-            randomness: fields[1],
-            owner: AztecAddress::from_field(fields[2]),
-            header: NoteHeader::empty(),
-        }
-    }
-}
+// impl Deserialize<3> for CardNote {
+//     fn deserialize(fields: [Field; 3]) -> Self {
+//         CardNote {
+//             card: Card::from_field(fields[0]),
+//             randomness: fields[1],
+//             owner: AztecAddress::from_field(fields[2]),
+//             header: NoteHeader::empty(),
+//         }
+//     }
+// }
 
 //----------------------------Game Actions--------------------------------
 

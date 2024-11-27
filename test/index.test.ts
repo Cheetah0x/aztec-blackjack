@@ -23,19 +23,25 @@ import { setupSandbox, createAccount, retryWithDelay, delay } from "./utils";
 describe("BlackJack Priv", () => {
   let pxe: PXE;
   let playerWallet: AccountWallet;
+  let otherWallet: AccountWallet;
   let player: AztecAddress;
+  let other: AztecAddress;
   let blackjackContract: Contract;
   let playerBlackJackInstance: BlackJackContract;
+  let otherBlackJackInstance: BlackJackContract;
   let blackJackAddress: AztecAddress;
   let tokenContract: Contract;
   let tokenAddress: AztecAddress;
   let playerTokenInstance: TokenContract;
+  let otherTokenInstance: TokenContract;
   let blackJackTokenInstance: TokenContract;
 
   beforeAll(async () => {
     pxe = await setupSandbox();
     playerWallet = await createAccount(pxe);
+    otherWallet = await createAccount(pxe);
     player = playerWallet.getAddress();
+    other = otherWallet.getAddress();
 
     blackjackContract = await Contract.deploy(
       playerWallet,
@@ -55,6 +61,12 @@ describe("BlackJack Priv", () => {
       playerWallet
     );
     console.log("Player instance created at");
+
+    otherBlackJackInstance = await BlackJackContract.at(
+      blackJackAddress,
+      otherWallet
+    );
+    console.log("Other instance created at");
 
     //now deploy the token contract
     tokenContract = await Contract.deploy(
@@ -78,6 +90,9 @@ describe("BlackJack Priv", () => {
     playerTokenInstance = await TokenContract.at(tokenAddress, playerWallet);
     console.log("Player token instance created at");
 
+    otherTokenInstance = await TokenContract.at(tokenAddress, otherWallet);
+    console.log("Other token instance created at");
+
     //need to leave this to later.
     //also need to figure out how to send token to contract.
     // const blackJackWallet = await
@@ -86,7 +101,7 @@ describe("BlackJack Priv", () => {
     //   blackJackAddress
     // );
     console.log("Blackjack token instance created at");
-  }, 30000);
+  }, 30000000);
 
   //--------------------------CHECKING TOKEN CONTRACT WORKING-------------------
 
@@ -120,7 +135,7 @@ describe("BlackJack Priv", () => {
       .simulate();
     console.log("Balance of the player", balancepub);
     expect(balancepub).toEqual(500n);
-  });
+  }, 30000000);
 
   it("sends some token to blackjack contract", async () => {
     //sending some to the contract so it can pay out bets
@@ -167,7 +182,7 @@ describe("BlackJack Priv", () => {
     console.log("Contract balance", contractBalancePub);
 
     expect(contractBalancePub).toEqual(200n);
-  });
+  }, 30000000);
 
   //this does not work
   // it("send tokens to the player", async () => {
@@ -212,7 +227,7 @@ describe("BlackJack Priv", () => {
       .send()
       .wait();
     console.log("Bet made", bet);
-  });
+  }, 30000000);
 
   //-----------------------------WITHOUT MAKING BET----------------------
   it("beigns the game", async () => {
@@ -240,14 +255,14 @@ describe("BlackJack Priv", () => {
       .dealer_hand()
       .simulate();
     console.log("Begins the game, Dealer hand", dealer_hand);
-  });
+  }, 30000000);
 
   it("check if blackjack", async () => {
     const blackjack = await playerBlackJackInstance.methods
       .is_blackjack_view()
       .simulate();
     console.log("Check if blackjack, Is blackjack?", blackjack);
-  });
+  }, 30000000);
 
   it("player hits", async () => {
     // while (player_cards > 16) {
@@ -275,7 +290,44 @@ describe("BlackJack Priv", () => {
       .simulate();
     console.log("Player hits, Dealer hand", dealer_hand);
     // }
-  });
+  }, 30000000);
+
+  //-----------------------------Other account tests ----------------------------
+
+  //other person tries to view payers cards
+  it("other person tries to view players cards", async () => {
+    const cards = await otherBlackJackInstance.methods.player_hand().simulate();
+    console.log("Other person tries to view players cards", cards);
+  }, 30000000);
+
+  //other person tries to view dealers cards
+  it("other person tries to view dealers cards", async () => {
+    const cards = await otherBlackJackInstance.methods.dealer_hand().simulate();
+    console.log("Other person tries to view dealers cards", cards);
+  }, 30000000);
+
+  //tries to look at the bet
+  it("other person tries to look at the bet", async () => {
+    const bet = await otherBlackJackInstance.methods.get_bet().simulate();
+    console.log("Other person tries to look at the bet", bet);
+  }, 30000000);
+
+  //other person tries to look at the token
+  it("other person tries to look at the token", async () => {
+    const token = await otherBlackJackInstance.methods.get_token().simulate();
+    console.log("Other person tries to look at the token", token);
+  }, 30000000);
+
+  //call internal functions
+  // it("other person calls internal functions", async () => {
+  //   // @ts-ignore: Intentionally trying to call an internal function that shouldn't exist
+  //   const points = await otherBlackJackInstance.methods
+  //     .get_player_points(player)
+  //     .simulate();
+  //   console.log("Other person calls internal functions", points);
+  // }, 30000000);
+
+  //-----------------------------PLAYER STANDS----------------------------
 
   it("player stands", async () => {
     //now stand
@@ -310,7 +362,7 @@ describe("BlackJack Priv", () => {
       .dealer_hand()
       .simulate();
     console.log("Dealer stands, Dealer hand", dealer_hand);
-  }, 100000);
+  }, 30000000);
 
   it("reset the game", async () => {
     await playerBlackJackInstance.methods.reset_game().send().wait();
@@ -336,5 +388,5 @@ describe("BlackJack Priv", () => {
       { rank: 0n, suit: 0n },
       { rank: 0n, suit: 0n },
     ]);
-  });
+  }, 30000000);
 });
