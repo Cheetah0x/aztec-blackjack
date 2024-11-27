@@ -59,6 +59,10 @@ contract BlackJack {
     use dep::token::Token;
     use dep::value_note::value_note::ValueNote;
 
+    global ZERO_ADDRESS: AztecAddress = AztecAddress::from_field(
+        0x0000000000000000000000000000000000000000000000000000000000000000,
+    );
+
     //will have the deck in there but wont use tbh
     #[storage]
     struct Storage<Context> {
@@ -71,6 +75,7 @@ contract BlackJack {
         bet: Map<AztecAddress, PrivateMutable<ValueNote, Context>, Context>,
         insurance: Map<AztecAddress, PrivateSet<ValueNote, Context>, Context>,
         token: Map<AztecAddress, PrivateMutable<AddressNote, Context>, Context>,
+        winner: Map<AztecAddress, PublicMutable<AztecAddress, Context>, Context>,
     }
 
     #[initializer]
@@ -180,12 +185,9 @@ contract BlackJack {
 
         // add the tokenaddress to storage
         let mut token_note = AddressNote::new(token, player);
-        storage.token.at(player).initialize(&mut token_note).emit(encode_and_encrypt_note(
-            &mut context,
-            player_keys.ovpk_m,
-            player,
-            player,
-        ));
+        storage.token.at(player).initialize(&mut token_note).emit(
+            encode_and_encrypt_note_unconstrained(&mut context, player_keys.ovpk_m, player, player),
+        );
         // Ensure the call is authenticated
         // assert_current_call_valid_authwit(&mut context, player);
         // Token::at(token).transfer_from(player, contract_address, bet, 0).call(&mut context);
@@ -194,7 +196,7 @@ contract BlackJack {
         //will need to think about this from a security standpoint, need to only update the balance if the transfer is successful
         //maybe have it in a loop so that the note only gets added if the transfer is successful
         //will also need the payment to be successful before the note has been added, can add some assertions here
-        storage.bet.at(player).initialize(&mut bet_note).emit(encode_and_encrypt_note(
+        storage.bet.at(player).initialize(&mut bet_note).emit(encode_and_encrypt_note_unconstrained(
             &mut context,
             player_keys.ovpk_m,
             player,
@@ -216,12 +218,9 @@ contract BlackJack {
 
         let player_keys = get_public_keys(player);
         let mut insurance_note = ValueNote::new(insurance_bet, player);
-        storage.insurance.at(player).insert(&mut insurance_note).emit(encode_and_encrypt_note(
-            &mut context,
-            player_keys.ovpk_m,
-            player,
-            player,
-        ));
+        storage.insurance.at(player).insert(&mut insurance_note).emit(
+            encode_and_encrypt_note_unconstrained(&mut context, player_keys.ovpk_m, player, player),
+        );
 
         Token::at(token).transfer(contract_address, insurance_bet).call(&mut context);
     }
@@ -355,6 +354,8 @@ contract BlackJack {
             // Token::at(token).transfer(player, 2 * bet).call(&mut context);
             win = true;
         }
+        let winner = if win { player } else { contract_address };
+        BlackJack::at(contract_address).winner(winner).enqueue(&mut context);
 
         win
     }
@@ -381,7 +382,7 @@ contract BlackJack {
 
         //will need to think about this from a security standpoint, need to only update the balance if the transfer is successful
         //maybe have it in a loop so that the note only gets added if the transfer is successful
-        storage.bet.at(player).replace(&mut bet_note).emit(encode_and_encrypt_note(
+        storage.bet.at(player).replace(&mut bet_note).emit(encode_and_encrypt_note_unconstrained(
             &mut context,
             player_keys.ovpk_m,
             player,
@@ -392,7 +393,12 @@ contract BlackJack {
 
     #[private]
     fn reset_game() {
+        //need to add assertions
+        //dealer cards at least 2, this should be enough, the player stand will have to have been made, can only reset if the game has ended
         let player = context.msg_sender();
+
+        let dealer_cards = storage.dealer_hand.at(player).get_notes(NoteGetterOptions::new());
+        assert(dealer_cards.len() >= 2, "Dealer does not have 2 cards in their hand");
 
         //if the dealer cards are greater than 2 then you should be able to reset
         //i think you could get timing attacks here, will need to add a game state flag,
@@ -417,6 +423,7 @@ contract BlackJack {
         BlackJack::at(contract_address).is_player_bust(false).enqueue(&mut context);
         BlackJack::at(contract_address).is_dealer_bust(false).enqueue(&mut context);
         BlackJack::at(contract_address).blackjack(false).enqueue(&mut context);
+        BlackJack::at(contract_address).winner(ZERO_ADDRESS).enqueue(&mut context);
     }
 
     #[public]
@@ -438,6 +445,13 @@ contract BlackJack {
     fn blackjack(blackjack: bool) {
         let player = context.msg_sender();
         storage.blackjack.at(player).write(blackjack)
+    }
+
+    #[public]
+    #[internal]
+    fn winner(winner: AztecAddress) {
+        let player = context.msg_sender();
+        storage.winner.at(player).write(winner)
     }
 }
 

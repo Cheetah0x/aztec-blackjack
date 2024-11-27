@@ -2,8 +2,9 @@ use crate::notes::CardNote::{Card, CardNote, Deck};
 use dep::address_note::address_note::AddressNote;
 use dep::aztec::{
     context::{PrivateContext, PublicContext},
-    encrypted_logs::encrypted_note_emission::encode_and_encrypt_note,
-    keys::getters::get_public_keys,
+    encrypted_logs::encrypted_note_emission::{
+        encode_and_encrypt_note, encode_and_encrypt_note_unconstrained,
+    }, keys::getters::get_public_keys,
     macros::{functions::{initializer, internal, private, public, view}, storage::storage},
     oracle::random::random,
     prelude::{
@@ -37,7 +38,7 @@ fn draw_card(
     let card: Card = Card { rank: card_value, suit: suit };
 
     let mut card_note = CardNote::new(card, player);
-    location.insert(&mut card_note).emit(encode_and_encrypt_note(
+    location.insert(&mut card_note).emit(encode_and_encrypt_note_unconstrained(
         context,
         player_keys.ovpk_m,
         player,
@@ -82,9 +83,9 @@ fn draw_until_seventeen(
     location: PrivateSet<CardNote, &mut PrivateContext>,
 ) -> u64 {
     let mut new_dealer_points = dealer_points;
-    for _ in 0..2  {
-    //loop not working, so just do it manually, 4 times should be enough for now.
-    //not even working manually
+    for _ in 0..2 {
+        //loop not working, so just do it manually, 4 times should be enough for now.
+        //not even working manually
         if new_dealer_points < 17 {
             // Draw a card
             draw_card(player, location, context);
@@ -125,7 +126,7 @@ fn payout_win(
     };
 
     let mut payout_note = ValueNote::new(payout_amount, player);
-    location.insert(&mut payout_note).emit(encode_and_encrypt_note(
+    location.insert(&mut payout_note).emit(encode_and_encrypt_note_unconstrained(
         context,
         player_keys.ovpk_m,
         player,
