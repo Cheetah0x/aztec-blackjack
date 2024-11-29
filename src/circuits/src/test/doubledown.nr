@@ -38,12 +38,7 @@ unconstrained fn doubledown_11() {
 
     env.advance_block_by(1);
     //check the bet
-    env.impersonate(blackjack_contract);
-    let unconstrained_context = env.unkonstrained();
-    let storage = BlackJack::Storage::init(unconstrained_context);
-    let bet = storage.bet.at(player).view_note().value as u64;
-    println(f"bet: {bet}");
-    assert(bet == 20, "Bet is not double of the original bet");
+    check_bet(env, blackjack_contract, player, 20);
 }
 
 #[test]
@@ -66,12 +61,7 @@ unconstrained fn double_down_10() {
     env.advance_block_by(1);
 
     //check the bet
-    env.impersonate(blackjack_contract);
-    let unconstrained_context = env.unkonstrained();
-    let storage = BlackJack::Storage::init(unconstrained_context);
-    let bet = storage.bet.at(player).view_note().value as u64;
-    println(f"bet: {bet}");
-    assert(bet == 20, "Bet is not double of the original bet");
+    check_bet(env, blackjack_contract, player, 20);
 }
 
 #[test]
@@ -95,12 +85,7 @@ unconstrained fn double_down_9() {
     env.advance_block_by(1);
 
     //check the bet
-    env.impersonate(blackjack_contract);
-    let unconstrained_context = env.unkonstrained();
-    let storage = BlackJack::Storage::init(unconstrained_context);
-    let bet = storage.bet.at(player).view_note().value as u64;
-    println(f"bet: {bet}");
-    assert(bet == 20, "Bet is not double of the original bet");
+    check_bet(env, blackjack_contract, player, 20);
 }
 
 #[test(should_fail)]
@@ -137,6 +122,34 @@ unconstrained fn double_down_fail_no_bet() {
     BlackJack::at(blackjack_contract).double_down().call(&mut env.private());
 }
 
+#[test(should_fail)]
+unconstrained fn double_down_fail_double_downed() {
+    let (mut env, player, blackjack_contract, token_address) = setupPriv();
+
+    env.advance_block_by(1);
+    //make a bet
+    env.impersonate(player);
+    BlackJack::at(blackjack_contract).make_bet(10, token_address).call(&mut env.private());
+
+    //add a card to the player hand
+    add_card_note_player(env, blackjack_contract, player, 5, 0);
+    env.advance_block_by(1);
+    add_card_note_player(env, blackjack_contract, player, 6, 0);
+    env.advance_block_by(1);
+
+    //double down
+    env.impersonate(player);
+    BlackJack::at(blackjack_contract).double_down().call(&mut env.private());
+
+    env.advance_block_by(1);
+    //check the bet
+    check_bet(env, blackjack_contract, player, 20);
+
+    //double down again
+    env.impersonate(player);
+    BlackJack::at(blackjack_contract).double_down().call(&mut env.private());
+}
+
 pub unconstrained fn add_card_note_player(
     env: &mut TestEnvironment,
     blackjack_address: AztecAddress,
@@ -158,4 +171,18 @@ pub unconstrained fn add_card_note_player(
         player_card_slot,
         blackjack_address,
     );
+}
+
+pub unconstrained fn check_bet(
+    env: &mut TestEnvironment,
+    blackjack_address: AztecAddress,
+    player: AztecAddress,
+    bet: u64,
+) {
+    env.impersonate(blackjack_address);
+    let unconstrained_context = env.unkonstrained();
+    let storage = BlackJack::Storage::init(unconstrained_context);
+    let bet = storage.bet.at(player).view_note().value as u64;
+    println(f"bet: {bet}");
+    assert(bet == bet, "Bet is not the expected bet");
 }

@@ -25,19 +25,29 @@ unconstrained fn insurance() {
     env.impersonate(player);
     BlackJack::at(blackjack_contract).make_bet(10, token_address).call(&mut env.private());
 
+    //this should work, just dont know how to use the cheat code properly
+    // //begin game
+    // env.impersonate(player);
+    // BlackJack::at(blackjack_contract).begin_game().call(&mut env.private());
     // //set game state to active
-    // game_state(env, blackjack_contract, player, 1);
+    env.impersonate(blackjack_contract);
+    game_state(env, blackjack_contract, player, 1);
     env.advance_block_by(10);
     //include the ace in the dealers hand
     add_card_note_dealer(env, blackjack_contract, player, 1, 0);
 
+    env.impersonate(blackjack_contract);
+    let unconstrained_context = env.unkonstrained();
+    let storage = BlackJack::Storage::init(unconstrained_context);
+    let game_state = storage.game_state.at(player).get_current_value() as u64;
+    println(f"game state: {game_state}");
+
     //player buys insurance
+    env.impersonate(player);
     BlackJack::at(blackjack_contract).place_insurance_bet().call(&mut env.private());
 
     //check that the insurance bet was made
     env.impersonate(blackjack_contract);
-    let unconstrained_context = env.unkonstrained();
-    let storage = BlackJack::Storage::init(unconstrained_context);
     let insurance_bet = storage.insurance.at(player).view_note().value as u64;
     assert(insurance_bet == 5, "Insurance bet is not half of the original bet");
 }
@@ -142,8 +152,22 @@ pub unconstrained fn game_state(
     env.impersonate(blackjack_address);
     let unconstrained_context = env.unkonstrained();
     let storage = BlackJack::Storage::init(unconstrained_context);
-    let game_state_slot =
-        derive_storage_slot_in_map(BlackJack::storage_layout().game_state.slot, player);
-    cheatcodes::direct_storage_write(blackjack_address, game_state_slot, [state]);
+    // let game_state_slot =
+    //     derive_storage_slot_in_map(BlackJack::storage_layout().game_state.slot, player);
+    let game_state_slot = BlackJack::storage_layout().game_state.slot;
+    println(f"game state slot: {game_state_slot}");
+    let game_slot = derive_storage_slot_in_map(game_state_slot, player);
+    println(f"game slot: {game_slot}");
+    //should be 12
+    // Print values before writing
+    println(f"State value: {state}");
+
+    cheatcodes::direct_storage_write(blackjack_address, game_state_slot, [state, 0]);
+
+    env.advance_block_by(1);
+
+    // Verify the write by reading the value
+    let current_state = storage.game_state.at(player).get_current_value();
+    println(f"State after write: {current_state}");
 }
 

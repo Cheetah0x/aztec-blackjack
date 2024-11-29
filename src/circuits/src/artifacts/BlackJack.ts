@@ -108,7 +108,7 @@ export class BlackJackContract extends ContractBase {
   }
   
 
-  public static get storage(): ContractStorageLayout<'player_hand' | 'dealer_hand' | 'player_bust' | 'dealer_bust' | 'blackjack' | 'bet' | 'insurance' | 'token' | 'winner' | 'double_down' | 'split'> {
+  public static get storage(): ContractStorageLayout<'player_hand' | 'dealer_hand' | 'player_bust' | 'dealer_bust' | 'blackjack' | 'bet' | 'insurance' | 'token' | 'winner' | 'double_down' | 'split' | 'game_state'> {
       return {
         player_hand: {
       slot: new Fr(1n),
@@ -142,8 +142,11 @@ double_down: {
     },
 split: {
       slot: new Fr(11n),
+    },
+game_state: {
+      slot: new Fr(12n),
     }
-      } as ContractStorageLayout<'player_hand' | 'dealer_hand' | 'player_bust' | 'dealer_bust' | 'blackjack' | 'bet' | 'insurance' | 'token' | 'winner' | 'double_down' | 'split'>;
+      } as ContractStorageLayout<'player_hand' | 'dealer_hand' | 'player_bust' | 'dealer_bust' | 'blackjack' | 'bet' | 'insurance' | 'token' | 'winner' | 'double_down' | 'split' | 'game_state'>;
     }
     
 
@@ -186,8 +189,8 @@ CardNote: {
     /** dealer_points() */
     dealer_points: (() => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
 
-    /** double_down(token: struct) */
-    double_down: ((token: AztecAddressLike) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
+    /** double_down() */
+    double_down: (() => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
 
     /** get_bet() */
     get_bet: (() => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
@@ -207,8 +210,8 @@ CardNote: {
     /** make_bet(bet: field, token: struct) */
     make_bet: ((bet: FieldLike, token: AztecAddressLike) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
 
-    /** place_insurance_bet(insurance_bet: field, token: struct) */
-    place_insurance_bet: ((insurance_bet: FieldLike, token: AztecAddressLike) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
+    /** place_insurance_bet() */
+    place_insurance_bet: (() => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
 
     /** player_hand() */
     player_hand: (() => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;

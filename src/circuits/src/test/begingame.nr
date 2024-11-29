@@ -33,8 +33,6 @@ unconstrained fn beginGame() {
 
     //check the bet is correct
     env.impersonate(player);
-    // let bet = BlackJack::at(blackjack_contract).get_bet().view(&mut env.private());
-    // println(f"Bet: {bet}");
     env.advance_block_by(1);
     let begin_game = BlackJack::at(blackjack_contract).begin_game().call(&mut env.private());
 
@@ -60,6 +58,7 @@ unconstrained fn beginGame() {
     println("checkpoint 3");
 
     //now need to hit
+    env.advance_block_by(1);
     env.impersonate(player);
     BlackJack::at(blackjack_contract).player_hit().call(&mut env.private());
 
@@ -73,6 +72,7 @@ unconstrained fn beginGame() {
     println(f"Updated Player cards: {player_hand2}");
 
     println("checkpoint 5");
+    env.advance_block_by(1);
 
     //check what these add to
     env.impersonate(player);
@@ -90,11 +90,6 @@ unconstrained fn beginGame() {
 
     env.advance_block_by(1);
     println("checkpoint 8");
-
-    //lets check the token
-    let token = BlackJack::at(blackjack_contract).get_token().view(&mut env.private());
-    println(f"Token: {token}");
-    println(f"player owner: {player}");
 
     println("checkpoint 9");
     //add the test for when the player stands
