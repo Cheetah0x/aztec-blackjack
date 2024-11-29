@@ -6,11 +6,8 @@ use dep::aztec::note::note_getter::view_notes;
 use dep::aztec::note::note_viewer_options::NoteViewerOptions;
 use dep::aztec::{
     oracle::{
-        execution::{get_block_number, get_contract_address},
-        random::random,
-        storage::storage_read,
-    },
-    prelude::{AztecAddress, NoteHeader},
+        execution::{get_block_number, get_contract_address}, random::random, storage::storage_read,
+    }, prelude::{AztecAddress, NoteHeader},
     protocol_types::storage::map::derive_storage_slot_in_map,
     test::helpers::{cheatcodes, test_environment::TestEnvironment},
 };
@@ -151,6 +148,8 @@ unconstrained fn beginGame() {
         "Player hand is not empty",
     );
 
+    println("checkpoint 15");
+
     //check the dealer hand is empty
     env.impersonate(blackjack_contract);
     let dealer_hand3 = BlackJack::at(blackjack_contract).dealer_hand().view(&mut env.private());
@@ -170,10 +169,7 @@ unconstrained fn beginGame() {
         "Dealer hand is not empty",
     );
 
-    //check the bet is gone
-    env.impersonate(player);
-    let bet = BlackJack::at(blackjack_contract).get_bet().view(&mut env.private());
-    println(f"Bet: {bet}");
+    println("checkpoint 16");
 }
 
 //next i need to add the player hit function.

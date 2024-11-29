@@ -24,6 +24,9 @@
 
 //time to add some privacy
 //what actually needs to be private here?
+//the view functions are unconstrained reads, this means that the notes do not have to be replaced and stuff
+
+//TODO: add the logic for the player to split
 
 mod helpers;
 mod test;
@@ -64,10 +67,10 @@ contract BlackJack {
         0x0000000000000000000000000000000000000000000000000000000000000000,
     );
 
-    //will have the deck in there but wont use tbh
+    //this is the version where we are not using the card deck. Have the assumptions laid out in the spec
     #[storage]
     struct Storage<Context> {
-        card_deck_used: PrivateSet<CardNote, Context>,
+        // card_deck_used: Map<AztecAddress, PrivateSet<CardNote, Context>, Context>,
         player_hand: Map<AztecAddress, PrivateSet<CardNote, Context>, Context>,
         dealer_hand: Map<AztecAddress, PrivateSet<CardNote, Context>, Context>,
         player_bust: Map<AztecAddress, PublicMutable<bool, Context>, Context>, //should probs map this to the player address
@@ -78,6 +81,7 @@ contract BlackJack {
         token: Map<AztecAddress, PrivateMutable<AddressNote, Context>, Context>,
         winner: Map<AztecAddress, PublicMutable<AztecAddress, Context>, Context>,
     }
+    //TODO: need to add double down and split to storage
 
     #[initializer]
     #[private]
@@ -89,6 +93,7 @@ contract BlackJack {
         let player = context.msg_sender();
         let bet = storage.bet.at(player).get_note().note.value as u64;
         bet
+        //TODO: update these to unconstrained reads
     }
 
     #[private]
@@ -97,6 +102,7 @@ contract BlackJack {
         let player = context.msg_sender();
         let token = storage.token.at(player).get_note().note.address;
         token
+        //can update these to unconstrained reads
     }
 
     #[private]
@@ -174,6 +180,14 @@ contract BlackJack {
 
     //at the start of the game, the player will need to make a bet
     //the user will have to send the funds to the contract
+    //TODO: implement the token transfer once bug is patched
+    //TODO: Authwit?
+    //TODO: protect against reentrancy
+    //TODO: make sure the bet is greater than 0
+    //TODO: make sure the bet is less than the balance of the player
+    //TODO: make sure there are not multiple bets
+    //TODO: Have a max and minumum bet
+    //TODO: ensure that the player has enough balance to make the bet
     #[private]
     fn make_bet(bet: Field, token: AztecAddress) {
         let player = context.msg_sender();
@@ -184,9 +198,12 @@ contract BlackJack {
 
         // add the tokenaddress to storage
         let mut token_note = AddressNote::new(token, player);
-        storage.token.at(player).initialize(&mut token_note).emit(
-            encode_and_encrypt_note_unconstrained(&mut context, player_keys.ovpk_m, player, player),
-        );
+        storage.token.at(player).initialize(&mut token_note).emit(encode_and_encrypt_note(
+            &mut context,
+            player_keys.ovpk_m,
+            player,
+            player,
+        ));
         // Ensure the call is authenticated
         // assert_current_call_valid_authwit(&mut context, player);
         // Token::at(token).transfer_from(player, contract_address, bet, 0).call(&mut context);
@@ -195,7 +212,7 @@ contract BlackJack {
         //will need to think about this from a security standpoint, need to only update the balance if the transfer is successful
         //maybe have it in a loop so that the note only gets added if the transfer is successful
         //will also need the payment to be successful before the note has been added, can add some assertions here
-        storage.bet.at(player).initialize(&mut bet_note).emit(encode_and_encrypt_note_unconstrained(
+        storage.bet.at(player).initialize(&mut bet_note).emit(encode_and_encrypt_note(
             &mut context,
             player_keys.ovpk_m,
             player,
@@ -204,6 +221,11 @@ contract BlackJack {
     }
 
     //insurance that the user can take out if the dealer has an ace on the first card
+    //TODO: insurance bet should be half of the original bet.
+    //TODO: verifify the player has suffucient balance to take out the insurance bet. ie, the transfer goes through first
+    //TODO: protect against reentrancy
+    //TODO: prevent multiple insurance bets
+    //TODO: make sure game state allows for an insurance bet, ie cards are 0
     #[private]
     fn place_insurance_bet(insurance_bet: Field, token: AztecAddress) {
         let player = context.msg_sender();
@@ -217,9 +239,12 @@ contract BlackJack {
 
         let player_keys = get_public_keys(player);
         let mut insurance_note = ValueNote::new(insurance_bet, player);
-        storage.insurance.at(player).insert(&mut insurance_note).emit(
-            encode_and_encrypt_note_unconstrained(&mut context, player_keys.ovpk_m, player, player),
-        );
+        storage.insurance.at(player).insert(&mut insurance_note).emit(encode_and_encrypt_note(
+            &mut context,
+            player_keys.ovpk_m,
+            player,
+            player,
+        ));
 
         Token::at(token).transfer(contract_address, insurance_bet).call(&mut context);
     }
@@ -230,6 +255,11 @@ contract BlackJack {
         context.this_address()
     }
 
+    //TODO:check the game is not already in progress
+    //TODO: Race conditions, prevent player from calling this multiple times before finishing the game
+    //TODO: Could emit events that the game has started
+    //TODO: Validate that the hands are properly initialized before starting
+    //TODO: include the flags to ensure that the game is already in progress
     #[private]
     fn begin_game() {
         //add logic that a game can only be started if the player has made a bet
@@ -243,9 +273,8 @@ contract BlackJack {
         assert(bet > 0, "No bet made");
         let contract_address = context.this_address();
         let location = storage.player_hand.at(player);
-        let options = NoteGetterOptions::new();
-        let used_cards: BoundedVec<CardNote, 16> = storage.card_deck_used.get_notes(options);
-
+        // let options = NoteGetterOptions::new();
+        // let used_cards: BoundedVec<CardNote, 16> = storage.card_deck_used.get_notes(options);
         //3. Will need to draw the cards, can do this using random atm, 2 for the player, one for the dealer and add them to the hands.
         for i in 0..2 {
             draw_card(player, location, &mut context);
@@ -260,6 +289,9 @@ contract BlackJack {
         draw_card(player, storage.dealer_hand.at(player), &mut context);
     }
 
+    //TODO: the assertion of 2 cards prevents multiple hits, will need to change this, 2 or more cards
+    //TODO: ensure the player is allowed to hit,( has not standed or doubled down)
+    //TODO: event emission??
     #[private]
     fn player_hit() {
         //read the cards that have been used, will not do this for now.
@@ -273,7 +305,7 @@ contract BlackJack {
         let player_cards = player_hand.get_notes(NoteGetterOptions::new());
         assert(player_cards.len() == 2, "Player does not have 2 cards in their hand");
 
-        let points = get_player_points(player);
+        let points = card_points(player_hand);
         //can have the bust state internal here, will have to update it at somepoint
         let mut bust = false;
         if points > 21 {
@@ -287,7 +319,7 @@ contract BlackJack {
         }
 
         //get the new points
-        let points = get_player_points(player);
+        let points = card_points(player_hand);
 
         //can have the bust state internal here, will have to update it at somepoint
         let mut bust = false;
@@ -298,6 +330,10 @@ contract BlackJack {
     }
 
     //now i need to add the logic for the player standing and what happens with the dealer.
+    //TODO: return bet for a tie
+    //TODO: reset the game state after the game ends, instead of calling the reset function. would be nice if this was separate, but may have to be included
+    //TODO: Race conditions, prevent player from calling this multiple times before finishing the game
+    //TODO: make sure dealer hands are private until they need to be shown.
     #[private]
     fn player_stand() -> bool {
         //1.Get the player and contract addresses
@@ -309,9 +345,9 @@ contract BlackJack {
         let player_cards = player_hand.get_notes(NoteGetterOptions::new());
         assert(player_cards.len() >= 2, "Player does not have 2 cards in their hand");
 
-        //3. Check the dealer has at least 1 card in their hand
+        //3. Check the dealer has 1 card in their hand
         let dealer_cards = storage.dealer_hand.at(player).get_notes(NoteGetterOptions::new());
-        assert(dealer_cards.len() >= 1, "Dealer does not have 1 card in their hand");
+        assert(dealer_cards.len() == 1, "Dealer does not have 1 card in their hand");
 
         //4. Check if bet notes exist before accessing, will need a bet anyway for the payout
         // let bet = storage.bet.at(player).get_note().note.value as u64;
@@ -319,17 +355,17 @@ contract BlackJack {
         // 5. Get the token address, for the transfer later
         // let token = storage.token.at(player).get_note().note.address;
         //Get the current points for the dealer and the player
-        let player_points = get_player_points(player);
+        let player_points = card_points(player_hand);
 
         draw_card(player, storage.dealer_hand.at(player), &mut context);
 
-        let mut dealer_points = get_dealer_points(player);
+        let mut dealer_points = card_points(storage.dealer_hand.at(player));
 
         // draw_until_seventeen(dealer_points, player, &mut context, storage.dealer_hand.at(player));
         //ok this dead ass worked once, try again, failed the second time
         if dealer_points < 17 {
             draw_card(player, storage.dealer_hand.at(player), &mut context);
-            dealer_points = get_dealer_points(player);
+            dealer_points = card_points(storage.dealer_hand.at(player));
         }
         // if dealer_points < 17 {
         //     draw_card(player, storage.dealer_hand.at(player), &mut context);
@@ -360,12 +396,18 @@ contract BlackJack {
     }
 
     //logic for double down
+    //TODO: token can be fetched from storage
+    //TODO: Implement the token transfer
+    //TODO: player has to stand after this
+    //TODO: prevent multiple double downs
+    //TODO: update game state to reflect the double down
+    //TODO: protect against reentrancy and unauthorized calls
     #[private]
     fn double_down(token: AztecAddress) {
         let player = context.msg_sender();
         let contract_address = context.this_address();
         let player_keys = get_public_keys(player);
-        let player_points = get_player_points(player);
+        let player_points = card_points(storage.player_hand.at(player));
         if (player_points < 9) {
             assert(false, "Player can only double down on 9,10 or 11");
         }
@@ -380,7 +422,7 @@ contract BlackJack {
 
         //will need to think about this from a security standpoint, need to only update the balance if the transfer is successful
         //maybe have it in a loop so that the note only gets added if the transfer is successful
-        storage.bet.at(player).replace(&mut bet_note).emit(encode_and_encrypt_note_unconstrained(
+        storage.bet.at(player).replace(&mut bet_note).emit(encode_and_encrypt_note(
             &mut context,
             player_keys.ovpk_m,
             player,
@@ -388,6 +430,11 @@ contract BlackJack {
         ));
         //so the player has doubled the bet, now they continue the game as normal
     }
+
+    //Potential Issues
+    //TODO: Ensure all game state is reset and pruged.
+    //TODO: Prevent resetting of the game while it is in progress, need to add tests for this.
+    //TODO: event that the game has been reset
 
     #[private]
     fn reset_game() {

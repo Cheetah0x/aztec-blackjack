@@ -38,7 +38,7 @@ fn draw_card(
     let card: Card = Card { rank: card_value, suit: suit };
 
     let mut card_note = CardNote::new(card, player);
-    location.insert(&mut card_note).emit(encode_and_encrypt_note_unconstrained(
+    location.insert(&mut card_note).emit(encode_and_encrypt_note(
         context,
         player_keys.ovpk_m,
         player,
@@ -126,7 +126,7 @@ fn payout_win(
     };
 
     let mut payout_note = ValueNote::new(payout_amount, player);
-    location.insert(&mut payout_note).emit(encode_and_encrypt_note_unconstrained(
+    location.insert(&mut payout_note).emit(encode_and_encrypt_note(
         context,
         player_keys.ovpk_m,
         player,

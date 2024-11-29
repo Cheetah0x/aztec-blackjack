@@ -108,39 +108,36 @@ export class BlackJackContract extends ContractBase {
   }
   
 
-  public static get storage(): ContractStorageLayout<'card_deck_used' | 'player_hand' | 'dealer_hand' | 'player_bust' | 'dealer_bust' | 'blackjack' | 'bet' | 'insurance' | 'token' | 'winner'> {
+  public static get storage(): ContractStorageLayout<'player_hand' | 'dealer_hand' | 'player_bust' | 'dealer_bust' | 'blackjack' | 'bet' | 'insurance' | 'token' | 'winner'> {
       return {
-        card_deck_used: {
+        player_hand: {
       slot: new Fr(1n),
     },
-player_hand: {
+dealer_hand: {
       slot: new Fr(2n),
     },
-dealer_hand: {
+player_bust: {
       slot: new Fr(3n),
     },
-player_bust: {
+dealer_bust: {
       slot: new Fr(4n),
     },
-dealer_bust: {
+blackjack: {
       slot: new Fr(5n),
     },
-blackjack: {
+bet: {
       slot: new Fr(6n),
     },
-bet: {
+insurance: {
       slot: new Fr(7n),
     },
-insurance: {
+token: {
       slot: new Fr(8n),
     },
-token: {
-      slot: new Fr(9n),
-    },
 winner: {
-      slot: new Fr(10n),
+      slot: new Fr(9n),
     }
-      } as ContractStorageLayout<'card_deck_used' | 'player_hand' | 'dealer_hand' | 'player_bust' | 'dealer_bust' | 'blackjack' | 'bet' | 'insurance' | 'token' | 'winner'>;
+      } as ContractStorageLayout<'player_hand' | 'dealer_hand' | 'player_bust' | 'dealer_bust' | 'blackjack' | 'bet' | 'insurance' | 'token' | 'winner'>;
     }
     
 
