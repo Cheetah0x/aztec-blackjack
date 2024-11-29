@@ -4,8 +4,7 @@ use dep::address_note::address_note::AddressNote;
 use dep::aztec::note::note_getter::view_notes;
 use dep::aztec::note::note_viewer_options::NoteViewerOptions;
 use dep::aztec::{
-    oracle::random::random,
-    prelude::{AztecAddress, NoteHeader},
+    oracle::random::random, prelude::{AztecAddress, NoteHeader},
     protocol_types::storage::map::derive_storage_slot_in_map,
     test::helpers::{cheatcodes, test_environment::TestEnvironment},
 };
@@ -95,3 +94,63 @@ unconstrained fn fetchbet() {
 
 // TODO:: ISSUE, the current token contract is too big for the tests, this is the error that i get
 // something about the max size being 3000, and it is like 3500
+
+#[test(should_fail)]
+unconstrained fn multipleBets() {
+    let (mut env, player, blackjack_contract, token_address) = setupPriv();
+
+    //make a bet
+    env.impersonate(player);
+    BlackJack::at(blackjack_contract).make_bet(10, token_address).call(&mut env.private());
+
+    env.advance_block_by(1);
+
+    //make another bet
+    BlackJack::at(blackjack_contract).make_bet(10, token_address).call(&mut env.private());
+
+    env.advance_block_by(1);
+}
+
+#[test(should_fail)]
+unconstrained fn betTooLow() {
+    let (mut env, player, blackjack_contract, token_address) = setupPriv();
+
+    //make a bet
+    env.impersonate(player);
+    BlackJack::at(blackjack_contract).make_bet(5, token_address).call(&mut env.private());
+
+    env.advance_block_by(1);
+}
+
+#[test(should_fail)]
+unconstrained fn betTooHigh() {
+    let (mut env, player, blackjack_contract, token_address) = setupPriv();
+
+    //make a bet
+    env.impersonate(player);
+    BlackJack::at(blackjack_contract).make_bet(101, token_address).call(&mut env.private());
+
+    env.advance_block_by(1);
+}
+
+#[test(should_fail)]
+unconstrained fn bet_start_bet() {
+    let (mut env, player, blackjack_contract, token_address) = setupPriv();
+
+    //make a bet
+    env.impersonate(player);
+    BlackJack::at(blackjack_contract).make_bet(10, token_address).call(&mut env.private());
+
+    env.advance_block_by(1);
+
+    //begin the game
+    BlackJack::at(blackjack_contract).begin_game().call(&mut env.private());
+
+    env.advance_block_by(1);
+
+    //make another bet
+    env.impersonate(player);
+    BlackJack::at(blackjack_contract).make_bet(10, token_address).call(&mut env.private());
+
+    env.advance_block_by(1);
+}

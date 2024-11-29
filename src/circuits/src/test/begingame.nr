@@ -1,6 +1,6 @@
 use crate::BlackJack;
 use crate::notes::CardNote::{Card, CardNote, Deck};
-use crate::test::utilsPriv::setupPriv;
+use crate::test::utilsPriv::{setupPriv, tokenSetup};
 use dep::address_note::address_note::AddressNote;
 use dep::aztec::note::note_getter::view_notes;
 use dep::aztec::note::note_viewer_options::NoteViewerOptions;
@@ -19,6 +19,7 @@ use std::test::OracleMock;
 #[test]
 unconstrained fn beginGame() {
     let (mut env, player, blackjack_contract, token_address) = setupPriv();
+    tokenSetup(env, blackjack_contract, token_address, player);
 
     env.impersonate(player);
 

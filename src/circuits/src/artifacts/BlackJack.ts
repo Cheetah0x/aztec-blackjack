@@ -108,7 +108,7 @@ export class BlackJackContract extends ContractBase {
   }
   
 
-  public static get storage(): ContractStorageLayout<'player_hand' | 'dealer_hand' | 'player_bust' | 'dealer_bust' | 'blackjack' | 'bet' | 'insurance' | 'token' | 'winner'> {
+  public static get storage(): ContractStorageLayout<'player_hand' | 'dealer_hand' | 'player_bust' | 'dealer_bust' | 'blackjack' | 'bet' | 'insurance' | 'token' | 'winner' | 'double_down' | 'split'> {
       return {
         player_hand: {
       slot: new Fr(1n),
@@ -136,8 +136,14 @@ token: {
     },
 winner: {
       slot: new Fr(9n),
+    },
+double_down: {
+      slot: new Fr(10n),
+    },
+split: {
+      slot: new Fr(11n),
     }
-      } as ContractStorageLayout<'player_hand' | 'dealer_hand' | 'player_bust' | 'dealer_bust' | 'blackjack' | 'bet' | 'insurance' | 'token' | 'winner'>;
+      } as ContractStorageLayout<'player_hand' | 'dealer_hand' | 'player_bust' | 'dealer_bust' | 'blackjack' | 'bet' | 'insurance' | 'token' | 'winner' | 'double_down' | 'split'>;
     }
     
 

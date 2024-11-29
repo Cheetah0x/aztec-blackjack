@@ -11,6 +11,8 @@ import { AztecAddress } from "@aztec/aztec.js";
 import { createPXEClient  } from "@aztec/aztec.js";
 import { ShieldswapWalletSdk  } from "@shieldswap/wallet-sdk";
 
+//TODO: need to include the insurance logic
+
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
