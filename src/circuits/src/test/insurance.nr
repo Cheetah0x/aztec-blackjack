@@ -18,6 +18,7 @@ use std::test::OracleMock;
 
 #[test]
 unconstrained fn insurance() {
+    //happy path
     let (mut env, player, blackjack_contract, token_address) = setupPriv();
 
     //make a bet
@@ -52,11 +53,6 @@ unconstrained fn insurance_fails_if_no_ace() {
 
     //check that the insurance bet fails
     BlackJack::at(blackjack_contract).place_insurance_bet().call(&mut env.private());
-    let unconstrained_context = env.unkonstrained();
-
-    let storage = BlackJack::Storage::init(unconstrained_context);
-    let insurance_bet = storage.insurance.at(player).view_note().value as u64;
-    assert(insurance_bet == 0, "Insurance bet was made");
 }
 
 #[test(should_fail)]
@@ -115,7 +111,7 @@ pub unconstrained fn add_card_note_dealer(
     env: &mut TestEnvironment,
     blackjack_address: AztecAddress,
     player: AztecAddress,
-    rank: u8,
+    rank: u64,
     note_randomness: Field,
 ) {
     // docs:start:txe_test_add_note
@@ -124,7 +120,7 @@ pub unconstrained fn add_card_note_dealer(
 
     env.add_note(
         &mut CardNote {
-            card: Card { rank: 1, suit: 0 },
+            card: Card { rank: rank, suit: 0 },
             randomness: note_randomness,
             owner: player,
             header: NoteHeader::empty(),

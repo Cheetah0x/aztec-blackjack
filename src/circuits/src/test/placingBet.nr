@@ -154,3 +154,32 @@ unconstrained fn bet_start_bet() {
 
     env.advance_block_by(1);
 }
+
+//bet with another token when bet is already made
+#[test(should_fail)]
+unconstrained fn bet_other_token() {
+    let (mut env, player, blackjack_contract, token_address) = setupPriv();
+
+    //make a bet
+    env.impersonate(player);
+    BlackJack::at(blackjack_contract).make_bet(10, token_address).call(&mut env.private());
+
+    env.advance_block_by(1);
+
+    //make another bet with another token
+    //deploy another token
+    let initializer_call_interface = Token::interface().constructor(
+        player,
+        "TestToken0000000000000000000001",
+        "TT00000000000000000000000000001",
+        18,
+    );
+
+    let token_contract_2 =
+        env.deploy_self("Token").with_public_void_initializer(initializer_call_interface);
+    let token_address_2 = token_contract_2.to_address();
+
+    //make a bet with the new token
+    env.impersonate(player);
+    BlackJack::at(blackjack_contract).make_bet(10, token_address_2).call(&mut env.private());
+}

@@ -178,6 +178,12 @@ contract BlackJack {
         storage.blackjack.at(player).read()
     }
 
+    #[public]
+    #[view]
+    fn contract_address() -> AztecAddress {
+        context.this_address()
+    }
+
     //at the start of the game, the player will need to make a bet
     //the user will have to send the funds to the contract
     //TODO: implement the token transfer once bug is patched
@@ -230,7 +236,6 @@ contract BlackJack {
     //TODO: insurance bet should be half of the original bet.
     //TODO: verifify the player has suffucient balance to take out the insurance bet. ie, the transfer goes through first
     //TODO: protect against reentrancy, still need to think about this, emitting events?
-    //TODO: make sure game state allows for an insurance bet, ie cards are 0
     #[private]
     fn place_insurance_bet() {
         let player = context.msg_sender();
@@ -260,12 +265,6 @@ contract BlackJack {
             player,
         ));
         // Token::at(token).transfer(contract_address, insurance_bet).call(&mut context);
-    }
-
-    #[public]
-    #[view]
-    fn contract_address() -> AztecAddress {
-        context.this_address()
     }
 
     //TODO:check the game is not already in progress
@@ -301,6 +300,44 @@ contract BlackJack {
         //for the dealer card
         draw_card(player, storage.dealer_hand.at(player), &mut context);
     }
+
+    //logic for double down
+    //TODO: token can be fetched from storage
+    //TODO: Implement the token transfer
+    //TODO: player has to stand after this
+    //TODO: prevent multiple double downs
+    //TODO: update game state to reflect the double down
+    //TODO: protect against reentrancy and unauthorized calls
+    #[private]
+    fn double_down(token: AztecAddress) {
+        let player = context.msg_sender();
+        let contract_address = context.this_address();
+        let player_keys = get_public_keys(player);
+        let player_points = card_points(storage.player_hand.at(player));
+        if (player_points < 9) {
+            assert(false, "Player can only double down on 9,10 or 11");
+        }
+        if (player_points > 11) {
+            assert(false, "Player can only double down on 9,10 or 11");
+        }
+        //need to figure out how to split the hand
+        //get the original bet amount, this will be the last note the player can decrpypt
+        let bet = storage.bet.at(player).get_note().note.value;
+        //then bet this again
+        let mut bet_note = ValueNote::new(bet * 2, player);
+
+        //will need to think about this from a security standpoint, need to only update the balance if the transfer is successful
+        //maybe have it in a loop so that the note only gets added if the transfer is successful
+        storage.bet.at(player).replace(&mut bet_note).emit(encode_and_encrypt_note(
+            &mut context,
+            player_keys.ovpk_m,
+            player,
+            player,
+        ));
+        //so the player has doubled the bet, now they continue the game as normal
+    }
+
+    //TODO: Implement the split function
 
     //TODO: the assertion of 2 cards prevents multiple hits, will need to change this, 2 or more cards
     //TODO: ensure the player is allowed to hit,( has not standed or doubled down)
@@ -406,42 +443,6 @@ contract BlackJack {
         BlackJack::at(contract_address).winner(winner).enqueue(&mut context);
 
         win
-    }
-
-    //logic for double down
-    //TODO: token can be fetched from storage
-    //TODO: Implement the token transfer
-    //TODO: player has to stand after this
-    //TODO: prevent multiple double downs
-    //TODO: update game state to reflect the double down
-    //TODO: protect against reentrancy and unauthorized calls
-    #[private]
-    fn double_down(token: AztecAddress) {
-        let player = context.msg_sender();
-        let contract_address = context.this_address();
-        let player_keys = get_public_keys(player);
-        let player_points = card_points(storage.player_hand.at(player));
-        if (player_points < 9) {
-            assert(false, "Player can only double down on 9,10 or 11");
-        }
-        if (player_points > 11) {
-            assert(false, "Player can only double down on 9,10 or 11");
-        }
-        //need to figure out how to split the hand
-        //get the original bet amount, this will be the last note the player can decrpypt
-        let bet = storage.bet.at(player).get_note().note.value;
-        //then bet this again
-        let mut bet_note = ValueNote::new(bet * 2, player);
-
-        //will need to think about this from a security standpoint, need to only update the balance if the transfer is successful
-        //maybe have it in a loop so that the note only gets added if the transfer is successful
-        storage.bet.at(player).replace(&mut bet_note).emit(encode_and_encrypt_note(
-            &mut context,
-            player_keys.ovpk_m,
-            player,
-            player,
-        ));
-        //so the player has doubled the bet, now they continue the game as normal
     }
 
     //Potential Issues
