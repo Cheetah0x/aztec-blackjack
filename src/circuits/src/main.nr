@@ -41,6 +41,7 @@ contract BlackJack {
         card_points, draw_card, draw_until_seventeen, is_blackjack,
     };
     use crate::notes::CardNote::{Card, CardNote, Deck};
+    use crate::notes::ValueNote::ValueNote;
     use dep::address_note::address_note::AddressNote;
     use dep::authwit::auth::{
         assert_current_call_valid_authwit, assert_current_call_valid_authwit_public,
@@ -55,17 +56,22 @@ contract BlackJack {
         note::lifecycle::destroy_note, oracle::random::random,
         prelude::{
             AztecAddress, FunctionSelector, Map, NoteGetterOptions, PrivateImmutable,
-            PrivateMutable, PrivateSet, PublicImmutable, PublicMutable,
+            PrivateMutable, PrivateSet, PublicImmutable, PublicMutable, SharedMutable,
         },
+        note::{
+            lifecycle::{create_note, destroy_note_unsafe}, note_emission::NoteEmission,
+            note_getter::{get_note, view_notes}, note_interface::{NoteInterface, NullifiableNote},
+        }, state_vars::storage::Storage::get_storage_slot,
     };
     use dep::aztec::oracle::debug_log::{debug_log, debug_log_format};
     use dep::token::Token;
-    use dep::value_note::value_note::ValueNote;
+    // use dep::value_note::value_note::ValueNote;
     use aztec::note::note_viewer_options::NoteViewerOptions;
 
     global ZERO_ADDRESS: AztecAddress = AztecAddress::from_field(
         0x0000000000000000000000000000000000000000000000000000000000000000,
     );
+    global CHANGE_AUTHORIZED_DELAY_BLOCKS: u32 = 1;
 
     //this is the version where we are not using the card deck. Have the assumptions laid out in the spec
     #[storage]
@@ -81,6 +87,7 @@ contract BlackJack {
         winner: Map<AztecAddress, PublicMutable<AztecAddress, Context>, Context>,
         double_down: Map<AztecAddress, PublicMutable<bool, Context>, Context>,
         split: Map<AztecAddress, PublicMutable<bool, Context>, Context>,
+        game_state: Map<AztecAddress, SharedMutable<Field, CHANGE_AUTHORIZED_DELAY_BLOCKS, Context>, Context>, //try without this for now
     }
     //TODO: need to add double down and split to storage
 
@@ -241,6 +248,9 @@ contract BlackJack {
         let player = context.msg_sender();
         let contract_address = context.this_address();
 
+        //check that the game is in progress
+        // let game_state = storage.game_state.at(player).get_current_value();
+        // assert(game_state == 1, "Game is not in progress");
         //get the token address and bet
         //these should fail if the bet has not been made
         let token = storage.token.at(player).get_note().note.address;
@@ -299,6 +309,9 @@ contract BlackJack {
         }
         //for the dealer card
         draw_card(player, storage.dealer_hand.at(player), &mut context);
+        //initiate game state, now active, could be an event, skipping for now
+        // let state = 1;
+        // BlackJack::at(contract_address).game_state(state).enqueue(&mut context);
     }
 
     //logic for double down
@@ -309,7 +322,7 @@ contract BlackJack {
     //TODO: update game state to reflect the double down
     //TODO: protect against reentrancy and unauthorized calls
     #[private]
-    fn double_down(token: AztecAddress) {
+    fn double_down() {
         let player = context.msg_sender();
         let contract_address = context.this_address();
         let player_keys = get_public_keys(player);
@@ -320,21 +333,32 @@ contract BlackJack {
         if (player_points > 11) {
             assert(false, "Player can only double down on 9,10 or 11");
         }
-        //need to figure out how to split the hand
-        //get the original bet amount, this will be the last note the player can decrpypt
-        let bet = storage.bet.at(player).get_note().note.value;
-        //then bet this again
-        let mut bet_note = ValueNote::new(bet * 2, player);
 
-        //will need to think about this from a security standpoint, need to only update the balance if the transfer is successful
-        //maybe have it in a loop so that the note only gets added if the transfer is successful
-        storage.bet.at(player).replace(&mut bet_note).emit(encode_and_encrypt_note(
+        //fetch the token address
+        let token = storage.token.at(player).get_note().note.address;
+
+        let slot = storage.bet.at(player).get_storage_slot();
+
+        // let bet = storage.bet.at(player).get_note().note.value;
+        let (bet_note, note_hash_for_read_request): (ValueNote, Field) =
+            get_note(&mut context, slot);
+        let bet_value = bet_note.value as u64;
+        //then bet this again
+        let mut new_bet_note = ValueNote::new((bet_value * 2) as Field, player);
+        destroy_note_unsafe(&mut context, bet_note, note_hash_for_read_request);
+        create_note(&mut context, slot, &mut new_bet_note).emit(encode_and_encrypt_note(
             &mut context,
             player_keys.ovpk_m,
             player,
             player,
         ));
-        //so the player has doubled the bet, now they continue the game as normal
+
+        // //transfer the token
+        // Token::at(token).transfer(player, bet).call(&mut context);
+        //will need to think about this from a security standpoint, need to only update the balance if the transfer is successful
+        //maybe have it in a loop so that the note only gets added if the transfer is successful
+        //so the player has doubled the bet, now they continue the game as normal, put can only hit one more time
+        BlackJack::at(contract_address).update_double_down(true).enqueue(&mut context);
     }
 
     //TODO: Implement the split function
@@ -353,7 +377,7 @@ contract BlackJack {
         //they can only have cards in their hand if that have already made a bet and started the game
         let player_hand = storage.player_hand.at(player);
         let player_cards = player_hand.get_notes(NoteGetterOptions::new());
-        assert(player_cards.len() == 2, "Player does not have 2 cards in their hand");
+        assert(player_cards.len() >= 2, "Player does not have 2 cards in their hand");
 
         let points = card_points(player_hand);
         //can have the bust state internal here, will have to update it at somepoint
@@ -483,6 +507,20 @@ contract BlackJack {
         BlackJack::at(contract_address).is_dealer_bust(false).enqueue(&mut context);
         BlackJack::at(contract_address).blackjack(false).enqueue(&mut context);
         BlackJack::at(contract_address).winner(ZERO_ADDRESS).enqueue(&mut context);
+    }
+
+    #[public]
+    #[internal]
+    fn game_state(state: Field) {
+        let player = context.msg_sender();
+        storage.game_state.at(player).schedule_value_change(state);
+    }
+
+    #[public]
+    #[internal]
+    fn update_double_down(has_double_downed: bool) {
+        let player = context.msg_sender();
+        storage.double_down.at(player).write(has_double_downed);
     }
 
     #[public]

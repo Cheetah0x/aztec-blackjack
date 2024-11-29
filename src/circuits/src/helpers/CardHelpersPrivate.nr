@@ -11,6 +11,11 @@ use dep::aztec::{
         AztecAddress, Map, NoteGetterOptions, PrivateImmutable, PrivateMutable, PrivateSet,
         PublicImmutable, PublicMutable,
     },
+    note::{
+        lifecycle::{create_note, destroy_note_unsafe}, note_emission::NoteEmission,
+        note_getter::{get_note, view_notes}, note_interface::{NoteInterface, NullifiableNote},
+        note_viewer_options::NoteViewerOptions,
+    },
 };
 use dep::aztec::oracle::debug_log::{debug_log, debug_log_format};
 use dep::value_note::value_note::ValueNote;
@@ -159,3 +164,4 @@ fn is_blackjack(player: AztecAddress, location: PrivateSet<CardNote, &mut Privat
 
     blackjack
 }
+

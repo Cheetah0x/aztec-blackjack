@@ -25,7 +25,9 @@ unconstrained fn insurance() {
     env.impersonate(player);
     BlackJack::at(blackjack_contract).make_bet(10, token_address).call(&mut env.private());
 
-    env.advance_block_by(1);
+    // //set game state to active
+    // game_state(env, blackjack_contract, player, 1);
+    env.advance_block_by(10);
     //include the ace in the dealers hand
     add_card_note_dealer(env, blackjack_contract, player, 1, 0);
 
@@ -130,3 +132,18 @@ pub unconstrained fn add_card_note_dealer(
     );
     // docs:end:txe_test_add_note
 }
+
+pub unconstrained fn game_state(
+    env: &mut TestEnvironment,
+    blackjack_address: AztecAddress,
+    player: AztecAddress,
+    state: Field,
+) {
+    env.impersonate(blackjack_address);
+    let unconstrained_context = env.unkonstrained();
+    let storage = BlackJack::Storage::init(unconstrained_context);
+    let game_state_slot =
+        derive_storage_slot_in_map(BlackJack::storage_layout().game_state.slot, player);
+    cheatcodes::direct_storage_write(blackjack_address, game_state_slot, [state]);
+}
+
