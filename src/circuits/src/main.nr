@@ -1,33 +1,3 @@
-//functionality that i need:
-
-//make it super simple to start similar to kits
-
-// Player hits/stands to beat dealer's hand by getting as close to 21 as possible.
-
-// Dealer must hit on and up to 16 and stand on 17.
-
-// Player can only double down on 9, 10, or 11.
-
-// Player can either double down or split, player cannot split then double down and vice versa.
-
-// Player cannot split then split again or double down more than once.
-
-// Player who splits Aces can receive only one more additional card on a hand.
-
-// Player can get insurance if dealer might have a BlackJack.
-
-// Aces are high unless card total is already greater than 11.
-
-// Blackjack payout is 3:2.
-
-// No surrender.
-
-//time to add some privacy
-//what actually needs to be private here?
-//the view functions are unconstrained reads, this means that the notes do not have to be replaced and stuff
-
-//TODO: add the logic for the player to split
-
 mod helpers;
 mod test;
 mod notes;
@@ -48,7 +18,7 @@ contract BlackJack {
         compute_authwit_message_hash_from_call, set_authorized,
     };
     use dep::aztec::{
-        context::{PrivateContext, PublicContext},
+        context::{PrivateContext, PublicContext, UnconstrainedContext},
         encrypted_logs::encrypted_note_emission::{
             encode_and_encrypt_note, encode_and_encrypt_note_unconstrained,
         }, keys::getters::get_public_keys,
@@ -93,13 +63,11 @@ contract BlackJack {
         double_down: Map<AztecAddress, SharedMutable<bool, CHANGE_AUTHORIZED_DELAY_BLOCKS, Context>, Context>,
         game_state: Map<AztecAddress, SharedMutable<Field, CHANGE_AUTHORIZED_DELAY_BLOCKS, Context>, Context>, //try without this for now
     }
-    //TODO: need to add double down and split to storage
 
     #[initializer]
     #[private]
     fn constructor() {}
 
-    //do not make these unconstrained
     #[private]
     #[view]
     fn get_bet() -> u64 {
@@ -126,9 +94,35 @@ contract BlackJack {
 
     #[private]
     #[view]
+    fn split_points() -> u8 {
+        let player = context.msg_sender();
+        let points = get_split_points(player);
+        points as u8
+    }
+
+    #[private]
+    #[view]
     fn player_hand() -> [Card; 8] {
         let player = context.msg_sender();
         let location = storage.player_hand.at(player);
+        let cards_vec = location.get_notes(NoteGetterOptions::new());
+        let mut cards_array = [Card { rank: 0, suit: 0 }; 8];
+
+        for i in 0..cards_vec.max_len() {
+            if i < cards_vec.len() {
+                let card = cards_vec.get_unchecked(i);
+                cards_array[i] = card.card;
+            }
+        }
+
+        cards_array
+    }
+
+    #[private]
+    #[view]
+    fn get_split_hand() -> [Card; 8] {
+        let player = context.msg_sender();
+        let location = storage.split_hand.at(player);
         let cards_vec = location.get_notes(NoteGetterOptions::new());
         let mut cards_array = [Card { rank: 0, suit: 0 }; 8];
 
@@ -234,8 +228,6 @@ contract BlackJack {
         ));
     }
 
-    //insurance that the user can take out if the dealer has an ace on the first card
-    //TODO: insurance bet should be half of the original bet.
     #[private]
     fn place_insurance_bet() {
         let player = context.msg_sender();
@@ -273,8 +265,6 @@ contract BlackJack {
     //TODO:check the game is not already in progress
     //TODO: Race conditions, prevent player from calling this multiple times before finishing the game
     //TODO: Could emit events that the game has started
-    //TODO: Validate that the hands are properly initialized before starting
-    //TODO: include the flags to ensure that the game is already in progress
     #[private]
     fn begin_game() {
         //add logic that a game can only be started if the player has made a bet
@@ -308,12 +298,6 @@ contract BlackJack {
     }
 
     //logic for double down
-    //TODO: token can be fetched from storage
-    //TODO: Implement the token transfer
-    //TODO: player has to stand after this
-    //TODO: prevent multiple double downs
-    //TODO: update game state to reflect the double down
-    //TODO: protect against reentrancy and unauthorized calls
     #[private]
     fn double_down() {
         let player = context.msg_sender();
@@ -367,7 +351,7 @@ contract BlackJack {
 
     //split
     #[private]
-    fn split_hand() {
+    fn split() {
         let player = context.msg_sender();
         let contract_address = context.this_address();
 
@@ -428,7 +412,6 @@ contract BlackJack {
     //TODO: check that the player has not doubled down, urgent
     //TODO: ensure the player is allowed to hit,( not doubled down)
     //TODO: event emission??
-    //update this for the split
     #[private]
     fn player_hit(hand: u64) {
         //read the cards that have been used, will not do this for now.
@@ -437,18 +420,20 @@ contract BlackJack {
         let contract_address = context.this_address();
         let mut location = storage.player_hand.at(player);
 
-        if hand == 1 {
-            location = storage.split_hand.at(player);
-        }
-
         //check that the player has not doubled down
         let double_downed = storage.double_down.at(player).get_current_value();
         assert(double_downed == false, "Player has already doubled down");
 
+        if hand == 1 {
+            location = storage.split_hand.at(player);
+        }
+
         //check that the player has cards in hand, do not need to check if the bet has been made
         //they can only have cards in their hand if that have already made a bet and started the game
         let player_cards = location.get_notes(NoteGetterOptions::new());
-        assert(player_cards.len() >= 2, "Player does not have 2 cards in their hand");
+        if hand == 0 {
+            assert(player_cards.len() >= 1, "Player does not have at least 1 card in their hand");
+        }
 
         //make sure dealer has card
         let dealer_cards = storage.dealer_hand.at(player).get_notes(NoteGetterOptions::new());
@@ -457,7 +442,7 @@ contract BlackJack {
         draw_card(player, location, &mut context);
 
         let points = card_points(location);
-        //can have the bust state internal here, will have to update it at somepoint
+
         let mut bust = false;
         if points > 21 {
             bust = true;
@@ -465,12 +450,9 @@ contract BlackJack {
         }
     }
 
-    //now i need to add the logic for the player standing and what happens with the dealer.
-    //TODO: return bet for a tie
     //TODO: reset the game state after the game ends, instead of calling the reset function. would be nice if this was separate, but may have to be included
     //TODO: Race conditions, prevent player from calling this multiple times before finishing the game
     //TODO: make sure dealer hands are private until they need to be shown.
-    //update this for the split
     #[private]
     fn player_stand() {
         //1.Get the player and contract addresses
@@ -505,14 +487,14 @@ contract BlackJack {
         // let bet = storage.bet.at(player).get_note().note.value as u64;
         // assert(bet > 0, "No bet notes found");
         // // 5. Get the token address, for the transfer later
-        let token = storage.token.at(player).get_note().note.address;
+        // let token = storage.token.at(player).get_note().note.address;
         //Get the current points for the dealer and the player
         let player_points = card_points(player_hand);
 
         //get split bet
         let mut split_bet = 0;
         if has_split {
-            split_bet = storage.split_bet.at(player).get_note().note.value;
+            // split_bet = storage.split_bet.at(player).get_note().note.value;
         }
 
         draw_card(player, storage.dealer_hand.at(player), &mut context);
@@ -594,11 +576,6 @@ contract BlackJack {
         BlackJack::at(contract_address).game_state(2).enqueue(&mut context);
     }
 
-    //Potential Issues
-    //TODO: Ensure all game state is reset and pruged.
-    //TODO: Prevent resetting of the game while it is in progress, need to add tests for this.
-    //TODO: event that the game has been reset
-
     #[private]
     fn reset_game() {
         //need to add assertions
@@ -626,15 +603,15 @@ contract BlackJack {
         let split_hand_location = storage.split_hand.at(player);
         split_hand_location.pop_notes(options);
 
-        //remove the bet
-        let slot = storage.bet.at(player).get_storage_slot();
-        let player_keys = get_public_keys(player);
-        let (bet_note, note_hash_for_read_request): (ValueNote, Field) =
-            get_note(&mut context, slot);
-        destroy_note_unsafe(&mut context, bet_note, note_hash_for_read_request);
-        create_note(&mut context, slot, &mut ValueNote::new(0, player)).emit(
-            encode_and_encrypt_note(&mut context, player_keys.ovpk_m, player, player),
-        );
+        //remove the bet, should work
+        // let slot = storage.bet.at(player).get_storage_slot();
+        // let player_keys = get_public_keys(player);
+        // let (bet_note, note_hash_for_read_request): (ValueNote, Field) =
+        //     get_note(&mut context, slot);
+        // destroy_note_unsafe(&mut context, bet_note, note_hash_for_read_request);
+        // create_note(&mut context, slot, &mut ValueNote::new(0, player)).emit(
+        //     encode_and_encrypt_note(&mut context, player_keys.ovpk_m, player, player),
+        // );
         //there needs a be a better option just to destroy the note
         // Reset game state flags
         let contract_address = context.this_address();
@@ -748,7 +725,41 @@ contract BlackJack {
 
         points as u64
     }
+
+    #[internal]
+    unconstrained fn get_split_points(player: AztecAddress) -> pub u64 {
+        let options: NoteViewerOptions<CardNote, 4> = NoteViewerOptions::new();
+        let location: PrivateSet<CardNote, UnconstrainedContext> = storage.split_hand.at(player);
+        let cards = location.view_notes(options);
+        let mut points = 0;
+        let mut aces = 0;
+        for i in 0..cards.max_len() {
+            if i < cards.len() {
+                let note = cards.get_unchecked(i);
+                let card = note.card;
+                let rank_value = if card.rank > 10 { 10 } else { card.rank };
+                if rank_value == 1 {
+                    aces += 1;
+                    points += 11; // Assume Ace is high initially
+                } else {
+                    points += rank_value;
+                }
+            }
+        }
+        // Adjust for Aces if points exceed 21
+        if points > 21 & aces > 0 {
+            points -= 10; // Make Ace low
+            aces -= 1;
+        }
+
+        points as u64
+    }
 }
+
+//Potential Issues
+//TODO: Ensure all game state is reset and pruged.
+//TODO: Prevent resetting of the game while it is in progress, need to add tests for this.
+//TODO: event that the game has been reset
 
 //this should be ok for now, need to do a check so the player can only stand if the have not lost.
 

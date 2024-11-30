@@ -8,3 +8,4 @@ mod insurance;
 mod doubledown;
 mod playerhit;
 mod reset;
+mod split;

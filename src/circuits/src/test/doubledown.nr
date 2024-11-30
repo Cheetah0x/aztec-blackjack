@@ -1,6 +1,6 @@
 use crate::BlackJack;
 use crate::notes::CardNote::{Card, CardNote, Deck};
-use crate::test::utilsPriv::{setupPriv, tokenSetup};
+use crate::test::utilsPriv::{setupPriv, tokenSetup, add_card_note_player, check_bet};
 use dep::address_note::address_note::AddressNote;
 use dep::aztec::note::note_getter::view_notes;
 use dep::aztec::note::note_viewer_options::NoteViewerOptions;
@@ -150,39 +150,3 @@ unconstrained fn double_down_fail_double_downed() {
     BlackJack::at(blackjack_contract).double_down().call(&mut env.private());
 }
 
-pub unconstrained fn add_card_note_player(
-    env: &mut TestEnvironment,
-    blackjack_address: AztecAddress,
-    player: AztecAddress,
-    rank: u64,
-    note_randomness: Field,
-) {
-    // docs:start:txe_test_add_note
-    let player_card_slot =
-        derive_storage_slot_in_map(BlackJack::storage_layout().player_hand.slot, player);
-
-    env.add_note(
-        &mut CardNote {
-            card: Card { rank: rank, suit: 0 },
-            randomness: note_randomness,
-            owner: player,
-            header: NoteHeader::empty(),
-        },
-        player_card_slot,
-        blackjack_address,
-    );
-}
-
-pub unconstrained fn check_bet(
-    env: &mut TestEnvironment,
-    blackjack_address: AztecAddress,
-    player: AztecAddress,
-    bet: u64,
-) {
-    env.impersonate(blackjack_address);
-    let unconstrained_context = env.unkonstrained();
-    let storage = BlackJack::Storage::init(unconstrained_context);
-    let bet = storage.bet.at(player).view_note().value as u64;
-    println(f"bet: {bet}");
-    assert(bet == bet, "Bet is not the expected bet");
-}

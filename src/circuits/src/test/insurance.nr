@@ -1,6 +1,8 @@
 use crate::BlackJack;
 use crate::notes::CardNote::{Card, CardNote, Deck};
-use crate::test::utilsPriv::{setupPriv, tokenSetup};
+use crate::test::utilsPriv::{
+    setupPriv, tokenSetup, add_card_note_dealer, check_bet, check_split_bet,
+};
 use dep::address_note::address_note::AddressNote;
 use dep::aztec::note::note_getter::view_notes;
 use dep::aztec::note::note_viewer_options::NoteViewerOptions;
@@ -22,8 +24,10 @@ unconstrained fn insurance() {
     let (mut env, player, blackjack_contract, token_address) = setupPriv();
 
     //make a bet
+    println("checkpoint 1");
     env.impersonate(player);
     BlackJack::at(blackjack_contract).make_bet(10, token_address).call(&mut env.private());
+    println("checkpoint 2");
 
     //this should work, just dont know how to use the cheat code properly
     // //begin game
@@ -117,30 +121,6 @@ unconstrained fn insurance_multiple_dealer_cards_ace_2() {
 
     //player buys insurance
     BlackJack::at(blackjack_contract).place_insurance_bet().call(&mut env.private());
-}
-
-pub unconstrained fn add_card_note_dealer(
-    env: &mut TestEnvironment,
-    blackjack_address: AztecAddress,
-    player: AztecAddress,
-    rank: u64,
-    note_randomness: Field,
-) {
-    // docs:start:txe_test_add_note
-    let dealer_card_slot =
-        derive_storage_slot_in_map(BlackJack::storage_layout().dealer_hand.slot, player);
-
-    env.add_note(
-        &mut CardNote {
-            card: Card { rank: rank, suit: 0 },
-            randomness: note_randomness,
-            owner: player,
-            header: NoteHeader::empty(),
-        },
-        dealer_card_slot,
-        blackjack_address,
-    );
-    // docs:end:txe_test_add_note
 }
 
 pub unconstrained fn game_state(

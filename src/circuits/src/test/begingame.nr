@@ -1,6 +1,8 @@
 use crate::BlackJack;
 use crate::notes::CardNote::{Card, CardNote, Deck};
-use crate::test::utilsPriv::{setupPriv, tokenSetup};
+use crate::test::utilsPriv::{
+    setupPriv, tokenSetup, check_bet, check_private_balance, mint_private, add_token_note,
+};
 use dep::address_note::address_note::AddressNote;
 use dep::aztec::note::note_getter::view_notes;
 use dep::aztec::note::note_viewer_options::NoteViewerOptions;
@@ -198,62 +200,6 @@ unconstrained fn cardValue() {
 //     //will need to add a two card notes to the storage to simulate this environment.
 //     //also need t0 get the token logic working properly for this to work.
 // }
-
-pub unconstrained fn check_private_balance(
-    token_contract_address: AztecAddress,
-    address: AztecAddress,
-    address_amount: Field,
-) {
-    let current_contract_address = get_contract_address();
-    cheatcodes::set_contract_address(token_contract_address);
-    // Direct call to unconstrained
-    let balance_of_private = Token::balance_of_private(address);
-    let balance = balance_of_private as u64;
-    // assert(balance_of_private == address_amount, "Private balance is not correct");
-    println(f"Private balance: {balance}");
-    cheatcodes::set_contract_address(current_contract_address);
-}
-
-pub unconstrained fn mint_private(
-    env: &mut TestEnvironment,
-    token_contract_address: AztecAddress,
-    recipient: AztecAddress,
-    amount: Field,
-) {
-    let note_randomness = random();
-    let _ = OracleMock::mock("getRandomField").returns(note_randomness);
-
-    // Token::at(token_contract_address).mint_to_private(recipient, amount).call(&mut env.private());
-    add_token_note(
-        env,
-        token_contract_address,
-        recipient,
-        amount,
-        note_randomness,
-    );
-}
-
-pub unconstrained fn add_token_note(
-    env: &mut TestEnvironment,
-    token_contract_address: AztecAddress,
-    owner: AztecAddress,
-    amount: Field,
-    note_randomness: Field,
-) {
-    let balances_owner_slot =
-        derive_storage_slot_in_map(Token::storage_layout().balances.slot, owner);
-
-    env.add_note(
-        &mut UintNote {
-            value: U128::from_integer(amount),
-            owner: owner,
-            randomness: note_randomness,
-            header: NoteHeader::empty(),
-        },
-        balances_owner_slot,
-        token_contract_address,
-    );
-}
 
 //get the card from storage
 // env.impersonate(blackjack_contract);

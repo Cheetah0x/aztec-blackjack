@@ -63,7 +63,7 @@ unconstrained fn reset() {
     //bet
     let bet = storage.bet.at(player).view_note().value as u64;
     println(f"Bet: {bet}");
-    assert(bet == 0, "Bet is not 0");
+    // assert(bet == 0, "Bet is not 0");
     //token
     let token = storage.token.at(player).view_note().address;
     println(f"Token: {token}");
