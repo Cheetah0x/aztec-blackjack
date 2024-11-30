@@ -1,12 +1,8 @@
 use crate::BlackJack;
 use crate::notes::CardNote::{Card, CardNote, Deck};
-use dep::address_note::address_note::AddressNote;
-use dep::aztec::note::note_getter::view_notes;
-use dep::aztec::note::note_viewer_options::NoteViewerOptions;
 use dep::aztec::{
-    oracle::random::random, prelude::{AztecAddress, NoteHeader},
+    oracle::random::random, prelude::NoteHeader,
     protocol_types::storage::map::derive_storage_slot_in_map,
-    test::helpers::{cheatcodes, test_environment::TestEnvironment},
 };
 use dep::std::println;
 // use crate::test::utilsPriv::{setupPriv, tokenSetup};

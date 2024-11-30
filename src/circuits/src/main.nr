@@ -195,21 +195,16 @@ contract BlackJack {
         let player = context.msg_sender();
         let contract_address = context.this_address();
 
-        //Validate bet amount against minumum and maximum limits
+        // CHECKS (validate state and inputs)
+        // 1. Input validation
         assert(bet as u64 >= MIN_BET, "Bet must be greater than 10");
         assert(bet as u64 <= MAX_BET, "Bet must be less than 100");
+        assert(token != ZERO_ADDRESS, "Invalid token address");
 
-        //get the player balance, assert that the player has enough balance
-        // let player_balance = Token::balance_of_private(player);
-        // assert(player_balance as u64 >= bet as u64, "Player does not have enough balance");
-        //ensure the call is authenticated
-        // assert_current_call_valid_authwit(&mut context, player);
-        //transfer the token to the contract from the player
-        // Token::at(token).transfer_in_private(player, contract_address, bet, 0).call(&mut context);
-        //get the players keys
+        // EFFECTS (modify state)
         let player_keys = get_public_keys(player);
 
-        //add the token address to storage
+        // 1. Store token address
         let mut token_note = AddressNote::new(token, player);
         storage.token.at(player).initialize(&mut token_note).emit(encode_and_encrypt_note(
             &mut context,
@@ -218,7 +213,7 @@ contract BlackJack {
             player,
         ));
 
-        //add the bet to storage
+        // 2. Store bet amount
         let mut bet_note = ValueNote::new(bet, player);
         storage.bet.at(player).initialize(&mut bet_note).emit(encode_and_encrypt_note(
             &mut context,
@@ -226,6 +221,12 @@ contract BlackJack {
             player,
             player,
         ));
+        // INTERACTIONS (external calls)
+        // 1. Authenticate transfer (commented out for now)
+        // assert_current_call_valid_authwit(&mut context, player);
+        // 2. Transfer tokens (commented out for now)
+        // Token::at(token).transfer_in_private(player, contract_address, bet, 0)
+        //     .call(&mut context);
     }
 
     #[private]
@@ -233,32 +234,36 @@ contract BlackJack {
         let player = context.msg_sender();
         let contract_address = context.this_address();
 
-        //check that the game is in progress
+        // CHECKS (validate state and inputs)
+        // 1. Game state validation
         let game_state = storage.game_state.at(player).get_current_value() as u8;
         assert(game_state == 1, "Game is not in progress");
-        //get the token address and bet
-        //these should fail if the bet has not been made
-        let token = storage.token.at(player).get_note().note.address;
+
+        // 2. Bet validation
         let bet = storage.bet.at(player).get_note().note.value as u64;
+        assert(bet > 0, "No existing bet found");
         let insurance_bet = (bet / 2) as Field;
 
+        // 3. Dealer card validation
         let options = NoteGetterOptions::new();
         let location = storage.dealer_hand.at(player);
-        let dealer_cards: BoundedVec<CardNote, 16> = location.get_notes(options);
+        let dealer_cards = location.get_notes(options);
         assert(dealer_cards.len() == 1, "Dealer does not have 1 card in their hand");
         let first_card = dealer_cards.get_unchecked(0);
         assert(first_card.card.rank == 1, "Dealer does not have an ace");
 
+        // EFFECTS (modify state)
+        // Can't initialize twice so protects from double insurance
         let player_keys = get_public_keys(player);
         let mut insurance_note = ValueNote::new(insurance_bet, player);
-
-        //Prevent multiple insurance bets, this is done with initialization
         storage.insurance.at(player).initialize(&mut insurance_note).emit(encode_and_encrypt_note(
             &mut context,
             player_keys.ovpk_m,
             player,
             player,
         ));
+        // INTERACTIONS (external calls)
+        // let token = storage.token.at(player).get_note().note.address;
         // Token::at(token).transfer(contract_address, insurance_bet).call(&mut context);
     }
 
@@ -267,34 +272,41 @@ contract BlackJack {
     //TODO: Could emit events that the game has started
     #[private]
     fn begin_game() {
-        //add logic that a game can only be started if the player has made a bet
-        //1. will need to read the cards from the deck that are being used.
-        //there is the limitation of only being able to fetch 16 at a time. This is a constraint we will have the mention
-        //Other option is to have another storage/ loop for this to store the other cards in another vec.
-        //2. will do this by fetching the notes of the cards and populating an array.
-        //check if a bet has been made
         let player = context.msg_sender();
+        let contract_address = context.this_address();
+
+        // CHECKS (validate state and inputs)
+        // 1. Verify bet exists
         let bet = storage.bet.at(player).get_note().note.value as u64;
         assert(bet > 0, "No bet made");
-        let contract_address = context.this_address();
+
+        // 2. Verify game isn't already in progress
+        let game_state = storage.game_state.at(player).get_current_value() as u8;
+        assert(game_state == 0, "Game already in progress");
+
+        // 3. Verify player doesn't already have cards
+        let player_hand = storage.player_hand.at(player).get_notes(NoteGetterOptions::new());
+        assert(player_hand.len() == 0, "Player already has cards");
+
+        // EFFECTS (modify state)
         let location = storage.player_hand.at(player);
-        // let options = NoteGetterOptions::new();
-        // let used_cards: BoundedVec<CardNote, 16> = storage.card_deck_used.get_notes(options);
-        //3. Will need to draw the cards, can do this using random atm, 2 for the player, one for the dealer and add them to the hands.
+
+        // 1. Draw initial cards
         for i in 0..2 {
             draw_card(player, location, &mut context);
         }
 
-        //check if it is blackjack
+        // 2. Check for blackjack
         let is_blackjack = is_blackjack(player, location);
         if is_blackjack {
             BlackJack::at(contract_address).blackjack(true).enqueue(&mut context);
         }
-        //for the dealer card
+
+        // 3. Draw dealer card
         draw_card(player, storage.dealer_hand.at(player), &mut context);
-        //initiate game state, now active, could be an event, skipping for now
-        let state = 1;
-        BlackJack::at(contract_address).game_state(state).enqueue(&mut context);
+
+        // 4. Update game state
+        BlackJack::at(contract_address).game_state(1).enqueue(&mut context);
     }
 
     //logic for double down
@@ -302,30 +314,29 @@ contract BlackJack {
     fn double_down() {
         let player = context.msg_sender();
         let contract_address = context.this_address();
-        let player_keys = get_public_keys(player);
-        let player_points = card_points(storage.player_hand.at(player));
 
-        //check that the player has not already doubled down
+        // CHECKS (validate state and inputs)
+        // 1. Game state checks
+        // let game_state = storage.game_state.at(player).get_current_value() as u8;
+        // assert(game_state == 1, "Game not in progress");
+        // 2. Double down eligibility checks
         let double_downed = storage.double_down.at(player).get_current_value();
-        assert(double_downed == false, "Player has already doubled down");
+        assert(!double_downed, "Already doubled down");
 
-        if (player_points < 9) {
-            assert(false, "Player can only double down on 9,10 or 11");
-        }
-        if (player_points > 11) {
-            assert(false, "Player can only double down on 9,10 or 11");
-        }
+        // 3. Points validation
+        let player_points = card_points(storage.player_hand.at(player));
+        assert(player_points >= 9 & player_points <= 11, "Can only double down on 9,10 or 11");
 
-        //fetch the token address
-        let token = storage.token.at(player).get_note().note.address;
-
+        // 4. Bet validation
         let slot = storage.bet.at(player).get_storage_slot();
-
-        // let bet = storage.bet.at(player).get_note().note.value;
         let (bet_note, note_hash_for_read_request): (ValueNote, Field) =
             get_note(&mut context, slot);
         let bet_value = bet_note.value as u64;
-        //then bet this again
+        assert(bet_value > 0, "No existing bet found");
+
+        // EFFECTS (modify state)
+        // 1. Update bet amount
+        let player_keys = get_public_keys(player);
         let mut new_bet_note = ValueNote::new((bet_value * 2) as Field, player);
         destroy_note_unsafe(&mut context, bet_note, note_hash_for_read_request);
         create_note(&mut context, slot, &mut new_bet_note).emit(encode_and_encrypt_note(
@@ -335,18 +346,14 @@ contract BlackJack {
             player,
         ));
 
-        // //transfer the token
-        // Token::at(token).transfer(player, bet).call(&mut context);
-        //will need to think about this from a security standpoint, need to only update the balance if the transfer is successful
-        //maybe have it in a loop so that the note only gets added if the transfer is successful
-        //so the player has doubled the bet, now they continue the game as normal, put can only hit one more time
-        BlackJack::at(contract_address).update_double_down(true).enqueue(&mut context);
-
-        //draw a card
+        // 2. Draw additional card
         draw_card(player, storage.player_hand.at(player), &mut context);
 
-        //update the game state to reflect the double down
+        // 3. Update double down status (only once)
         BlackJack::at(contract_address).update_double_down(true).enqueue(&mut context);
+        // INTERACTIONS (external calls)
+        // let token = storage.token.at(player).get_note().note.address;
+        // Token::at(token).transfer_in_private(player, contract_address, bet_value as Field, 0).call(&mut context);
     }
 
     //split
@@ -355,26 +362,34 @@ contract BlackJack {
         let player = context.msg_sender();
         let contract_address = context.this_address();
 
-        //ensure the player has not already split
+        // CHECKS (validate state and inputs)
+        // 1. Game state checks
+        // let game_state = storage.game_state.at(player).get_current_value() as u8;
+        // assert(game_state == 1, "Game not in progress");
+        // 2. Split eligibility checks
         let has_already_split = storage.has_split.at(player).get_current_value();
-        assert(has_already_split == false, "Player has already split");
+        assert(!has_already_split, "Player has already split");
 
         //retrieve the player hand
         let player_hand_location = storage.player_hand.at(player);
         let player_hand_notes = player_hand_location.get_notes(NoteGetterOptions::new());
         assert(player_hand_notes.len() == 2, "Player does not have 2 cards in their hand");
 
-        //check the two cards are of the same rank
+        // 4. Card rank check
         let first_card_rank = player_hand_notes.get_unchecked(0).card.rank as u64;
         let second_card = player_hand_notes.get_unchecked(1);
         let second_card_rank = second_card.card.rank as u64;
         assert(first_card_rank == second_card_rank, "Cards are not of the same rank");
 
-        //new hand for split
-        let split_hand_location = storage.split_hand.at(player);
-        let player_keys = get_public_keys(player);
+        // 5. Bet validation
+        let bet = storage.bet.at(player).get_note().note.value as u64;
+        assert(bet > 0, "No existing bet found");
 
-        //create the split hand
+        // EFFECTS (modify state)
+        let player_keys = get_public_keys(player);
+        let split_hand_location = storage.split_hand.at(player);
+
+        // 1. Create split hand
         let mut split_card_note = CardNote::new(second_card.card, player);
         split_hand_location.insert(&mut split_card_note).emit(encode_and_encrypt_note(
             &mut context,
@@ -383,20 +398,11 @@ contract BlackJack {
             player,
         ));
 
-        //remove the second card from the player hand
+        // 2. Remove card from original hand
         let second_card_note_hash = compute_note_hash_for_read_request(second_card);
         destroy_note_unsafe(&mut context, second_card, second_card_note_hash);
 
-        //Duplicate the original bet
-        let bet = storage.bet.at(player).get_note().note.value as u64;
-
-        //transfer the additional bet amount from the player to the contract
-        let token = storage.token.at(player).get_note().note.address;
-        //authwit
-        // Token::at(token).transfer_in_private(player, contract_address, bet as Field, 0).call(
-        //     &mut context,
-        // );
-        //then add the new bet to storage
+        // 3. Create split bet note
         let mut split_bet_note = ValueNote::new(bet as Field, player);
         storage.split_bet.at(player).initialize(&mut split_bet_note).emit(encode_and_encrypt_note(
             &mut context,
@@ -405,8 +411,14 @@ contract BlackJack {
             player,
         ));
 
-        //update the split flag
+        // 4. Update split status]
         BlackJack::at(contract_address).has_split(true).enqueue(&mut context);
+        // INTERACTIONS (external calls)
+        //TODO: get authwit
+        // let token = storage.token.at(player).get_note().note.address;
+        // Token::at(token).transfer_in_private(player, contract_address, bet as Field, 0).call(
+        //     &mut context,
+        // );
     }
 
     //TODO: check that the player has not doubled down, urgent
@@ -414,51 +426,49 @@ contract BlackJack {
     //TODO: event emission??
     #[private]
     fn player_hit(hand: u64) {
-        assert(hand == (1 | 0));
-        //read the cards that have been used, will not do this for now.
-        //get the player cards
         let player = context.msg_sender();
         let contract_address = context.this_address();
-        let mut location = storage.player_hand.at(player);
 
-        //check that the player has not doubled down
+        // CHECKS (validate state and inputs)
+        // 1. Input validation
+        assert((hand == 0) | (hand == 1), "Invalid hand parameter");
+
+        // 2. Game state validation
+        // let game_state = storage.game_state.at(player).get_current_value() as u8;
+        // assert(game_state == 1, "Game not in progress");
+        // 3. Double down validation
         let double_downed = storage.double_down.at(player).get_current_value();
-        assert(double_downed == false, "Player has already doubled down");
+        assert(!double_downed, "Player has already doubled down");
 
-        //has split
+        // 4. Hand validation
         let has_split = storage.has_split.at(player).get_current_value();
-
+        let mut location = storage.player_hand.at(player);
         if hand == 1 {
+            assert(has_split, "Cannot hit on split hand when not split");
             location = storage.split_hand.at(player);
         }
 
-        //check that the player has cards in hand, do not need to check if the bet has been made
-        //they can only have cards in their hand if that have already made a bet and started the game
+        // 5. Card count validation
         let player_cards = location.get_notes(NoteGetterOptions::new());
-
         if (hand == 0) & !has_split {
             assert(player_cards.len() >= 2, "Player does not have at least 2 cards in their hand");
-        }
-        if hand == 1 {
-            assert(has_split, "Cannot hit on split hand when not split");
-            assert(
-                player_cards.len() >= 1,
-                "Player does not have at least 2 cards in their split hand",
-            );
+        } else if hand == 1 {
+            assert(player_cards.len() >= 1, "Player does not have at least 1 card in split hand");
         }
 
-        //make sure dealer has card
+        // 6. Dealer validation
         let dealer_cards = storage.dealer_hand.at(player).get_notes(NoteGetterOptions::new());
         assert(dealer_cards.len() == 1, "Dealer does not have 1 card in their hand");
 
+        // EFFECTS (modify state)
+        // 1. Draw new card
         draw_card(player, location, &mut context);
 
+        // 2. Check for bust
         let points = card_points(location);
-
-        let mut bust = false;
         if points > 21 {
-            bust = true;
-            BlackJack::at(contract_address).is_player_bust(bust).enqueue(&mut context);
+            // INTERACTIONS (external calls)
+            BlackJack::at(contract_address).is_player_bust(true).enqueue(&mut context);
         }
     }
 
@@ -467,50 +477,41 @@ contract BlackJack {
     //TODO: make sure dealer hands are private until they need to be shown.
     #[private]
     fn player_stand() {
-        //1.Get the player and contract addresses
         let player = context.msg_sender();
         let contract_address = context.this_address();
 
-        //check that the game is in progress
-        let game_state = storage.game_state.at(player).get_current_value() as u8;
+        // CHECKS (validate state and inputs)
+        // 1. Game state validation
+        // let game_state = storage.game_state.at(player).get_current_value() as u8;
         // assert(game_state == 1, "Game is not in progress");
-        //2. Check the player has at least 2 cards in their hand
+        // 2. Hand validation
         let player_hand = storage.player_hand.at(player);
         let player_cards = player_hand.get_notes(NoteGetterOptions::new());
         assert(player_cards.len() >= 2, "Player does not have 2 cards in their hand");
 
-        //check that the player has not split
+        // 3. Split hand validation
         let has_split = storage.has_split.at(player).get_current_value();
         let mut split_points: u64 = 0;
-
         if has_split {
             let split_hand = storage.split_hand.at(player);
             let split_cards = split_hand.get_notes(NoteGetterOptions::new());
             assert(split_cards.len() >= 2, "Player does not have 2 cards in their split hand");
-
             split_points = card_points(split_hand);
         }
 
-        //3. Check the dealer has 1 card in their hand
+        // 4. Dealer validation
         let dealer_cards = storage.dealer_hand.at(player).get_notes(NoteGetterOptions::new());
         assert(dealer_cards.len() == 1, "Dealer does not have 1 card in their hand");
 
-        //4. Check if bet notes exist before accessing, will need a bet anyway for the payout, this is being used somewhere
+        // 5. Bet validation
         // let bet = storage.bet.at(player).get_note().note.value as u64;
         // assert(bet > 0, "No bet notes found");
-        // // 5. Get the token address, for the transfer later
-        // let token = storage.token.at(player).get_note().note.address;
-        //Get the current points for the dealer and the player
+        // EFFECTS (modify state)
+        // 1. Calculate points
         let player_points = card_points(player_hand);
 
-        //get split bet
-        let mut split_bet = 0;
-        if has_split {
-            // split_bet = storage.split_bet.at(player).get_note().note.value;
-        }
-
+        // 2. Draw dealer cards
         draw_card(player, storage.dealer_hand.at(player), &mut context);
-
         let mut dealer_points = card_points(storage.dealer_hand.at(player));
 
         // draw_until_seventeen(dealer_points, player, &mut context, storage.dealer_hand.at(player));
@@ -529,12 +530,13 @@ contract BlackJack {
         if dealer_bust {
             BlackJack::at(contract_address).is_dealer_bust(true).enqueue(&mut context);
         }
-        // // Determine win conditions
+
+        // 4. Calculate win conditions
         let player_bust = player_points > 21;
         let split_bust = split_points > 21;
-        // Add this line to check for blackjack
         let player_blackjack = storage.blackjack.at(player).get_current_value();
         let split_blackjack = has_split & is_blackjack(player, storage.split_hand.at(player));
+
         let player_wins_main = !player_bust & (player_points > dealer_points | dealer_bust);
         let player_ties_main = !player_bust & (player_points == dealer_points);
         let player_wins_split =
@@ -562,7 +564,8 @@ contract BlackJack {
             // Return original bet on tie
             // Token::at(token).transfer_in_private(contract_address, player, bet, 0).call(&mut context);
         }
-        // Handle split hand payout if it exists
+
+        // Handle split payouts if applicable
         if has_split {
             let split_bet = storage.split_bet.at(player).get_note().note.value;
             if player_wins_split {
@@ -590,32 +593,27 @@ contract BlackJack {
 
     #[private]
     fn reset_game() {
-        //need to add assertions
-        //dealer cards at least 2, this should be enough, the player stand will have to have been made, can only reset if the game has ended
         let player = context.msg_sender();
+        let contract_address = context.this_address();
 
-        //assert game state is 2
-        let game_state = storage.game_state.at(player).get_current_value() as u8;
-        // assert(game_state == 2, "Game is not in progress");
+        // CHECKS (validate state and inputs)
+        // 1. Game state validation
+        // let game_state = storage.game_state.at(player).get_current_value() as u8;
+        // assert(game_state == 2, "Game must be finished before resetting");
+        // 2. Dealer hand validation
         let dealer_cards = storage.dealer_hand.at(player).get_notes(NoteGetterOptions::new());
-        assert(dealer_cards.len() >= 2, "Dealer does not have 2 cards in their hand");
+        assert(dealer_cards.len() >= 2, "Dealer must have at least 2 cards");
 
-        // Remove all cards from player's hand
-        //need to also remove the token note
+        // EFFECTS (modify state)
         let options = NoteGetterOptions::new();
 
-        let player_location = storage.player_hand.at(player);
-        player_location.pop_notes(options);
+        // 1. Clear all hands
+        storage.player_hand.at(player).pop_notes(options);
+        storage.dealer_hand.at(player).pop_notes(options);
+        storage.split_hand.at(player).pop_notes(options);
 
-        // Remove all cards from dealer's hand
-        let dealer_location = storage.dealer_hand.at(player);
-        dealer_location.pop_notes(options);
-
-        //remove the split hand
-        let split_hand_location = storage.split_hand.at(player);
-        split_hand_location.pop_notes(options);
-
-        //remove the bet, should work
+        // 2. Clear bet notes
+        // TODO: Implement bet note clearing once note destruction is supported
         // let slot = storage.bet.at(player).get_storage_slot();
         // let player_keys = get_public_keys(player);
         // let (bet_note, note_hash_for_read_request): (ValueNote, Field) =
@@ -624,7 +622,6 @@ contract BlackJack {
         // create_note(&mut context, slot, &mut ValueNote::new(0, player)).emit(
         //     encode_and_encrypt_note(&mut context, player_keys.ovpk_m, player, player),
         // );
-        //there needs a be a better option just to destroy the note
         // Reset game state flags
         let contract_address = context.this_address();
         BlackJack::at(contract_address).is_player_bust(false).enqueue(&mut context);

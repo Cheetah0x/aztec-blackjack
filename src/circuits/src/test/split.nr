@@ -3,13 +3,6 @@ use crate::notes::CardNote::{Card, CardNote, Deck};
 use crate::test::utilsPriv::{
     setupPriv, check_bet, check_split_bet, add_card_note_player, add_card_note_dealer,
 };
-use dep::aztec::{
-    oracle::{
-        execution::{get_block_number, get_contract_address}, random::random, storage::storage_read,
-    }, prelude::{AztecAddress, NoteHeader},
-    protocol_types::storage::map::derive_storage_slot_in_map,
-    test::helpers::{cheatcodes, test_environment::TestEnvironment},
-};
 use dep::std::println;
 use dep::token::Token;
 

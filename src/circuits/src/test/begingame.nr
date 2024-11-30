@@ -3,20 +3,9 @@ use crate::notes::CardNote::{Card, CardNote, Deck};
 use crate::test::utilsPriv::{
     setupPriv, tokenSetup, check_bet, check_private_balance, mint_private, add_token_note,
 };
-use dep::address_note::address_note::AddressNote;
-use dep::aztec::note::note_getter::view_notes;
-use dep::aztec::note::note_viewer_options::NoteViewerOptions;
-use dep::aztec::{
-    oracle::{
-        execution::{get_block_number, get_contract_address}, random::random, storage::storage_read,
-    }, prelude::{AztecAddress, NoteHeader},
-    protocol_types::storage::map::derive_storage_slot_in_map,
-    test::helpers::{cheatcodes, test_environment::TestEnvironment},
-};
+use dep::aztec::oracle::random::random;
 use dep::std::println;
 use dep::token::Token;
-use dep::uint_note::uint_note::UintNote;
-use std::test::OracleMock;
 
 #[test]
 unconstrained fn beginGame() {

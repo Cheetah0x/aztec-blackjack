@@ -3,20 +3,12 @@ use crate::notes::CardNote::{Card, CardNote, Deck};
 use crate::test::utilsPriv::{
     setupPriv, tokenSetup, add_card_note_dealer, check_bet, check_split_bet,
 };
-use dep::address_note::address_note::AddressNote;
-use dep::aztec::note::note_getter::view_notes;
-use dep::aztec::note::note_viewer_options::NoteViewerOptions;
 use dep::aztec::{
-    oracle::{
-        execution::{get_block_number, get_contract_address}, random::random, storage::storage_read,
-    }, prelude::{AztecAddress, NoteHeader},
-    protocol_types::storage::map::derive_storage_slot_in_map,
+    prelude::AztecAddress, protocol_types::storage::map::derive_storage_slot_in_map,
     test::helpers::{cheatcodes, test_environment::TestEnvironment},
 };
 use dep::std::println;
 use dep::token::Token;
-use dep::uint_note::uint_note::UintNote;
-use std::test::OracleMock;
 
 #[test]
 unconstrained fn insurance() {
