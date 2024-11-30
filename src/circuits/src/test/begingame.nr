@@ -60,7 +60,7 @@ unconstrained fn beginGame() {
     //now need to hit
     env.advance_block_by(1);
     env.impersonate(player);
-    BlackJack::at(blackjack_contract).player_hit().call(&mut env.private());
+    BlackJack::at(blackjack_contract).player_hit(0).call(&mut env.private());
 
     println("checkpoint 4");
 

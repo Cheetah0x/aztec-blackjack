@@ -1,7 +1,7 @@
 {
   "blackjack-BlackJack.json": {
     "contractName": "BlackJack",
-    "hash": "300e8832cadd4c00400d602db11ca7e28b064f41b2b7e6986eb7c3fae141e18b"
+    "hash": "fd9f8ddbdea6e3128c52fd10777aa66356f02363e00f778fcbfabc3f9b1a945c"
   },
   "blackjack-Token.json": {
     "contractName": "Token",

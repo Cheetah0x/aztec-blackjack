@@ -29,7 +29,7 @@ unconstrained fn player_hit() {
     env.impersonate(player);
     BlackJack::at(blackjack_contract).begin_game().call(&mut env.private());
     // player hit
-    BlackJack::at(blackjack_contract).player_hit().call(&mut env.private());
+    BlackJack::at(blackjack_contract).player_hit(0).call(&mut env.private());
 
     // check player has 3 cards
     env.impersonate(blackjack_contract);
@@ -55,7 +55,7 @@ unconstrained fn player_hit_one_card() {
 
     //player hit
     env.impersonate(player);
-    BlackJack::at(blackjack_contract).player_hit().call(&mut env.private());
+    BlackJack::at(blackjack_contract).player_hit(0).call(&mut env.private());
 }
 
 #[test(should_fail)]
@@ -69,7 +69,7 @@ unconstrained fn player_hit_no_cards() {
 
     //player hit
     env.impersonate(player);
-    BlackJack::at(blackjack_contract).player_hit().call(&mut env.private());
+    BlackJack::at(blackjack_contract).player_hit(0).call(&mut env.private());
 }
 
 #[test(should_fail)]
@@ -82,7 +82,7 @@ unconstrained fn player_hit_no_bet() {
 
     //player hit
     env.impersonate(player);
-    BlackJack::at(blackjack_contract).player_hit().call(&mut env.private());
+    BlackJack::at(blackjack_contract).player_hit(0).call(&mut env.private());
 }
 
 #[test(should_fail)]
@@ -99,7 +99,7 @@ unconstrained fn player_hit_dealer_no_card() {
 
     //player hit
     env.impersonate(player);
-    BlackJack::at(blackjack_contract).player_hit().call(&mut env.private());
+    BlackJack::at(blackjack_contract).player_hit(0).call(&mut env.private());
 }
 
 #[test(should_fail)]
@@ -120,7 +120,7 @@ unconstrained fn player_hit_dealer_two_cards() {
 
     //player hit
     env.impersonate(player);
-    BlackJack::at(blackjack_contract).player_hit().call(&mut env.private());
+    BlackJack::at(blackjack_contract).player_hit(0).call(&mut env.private());
 }
 
 #[test]
@@ -142,7 +142,7 @@ unconstrained fn player_hit_double_downed() {
 
     //player hit
     env.impersonate(player);
-    BlackJack::at(blackjack_contract).player_hit().call(&mut env.private());
+    BlackJack::at(blackjack_contract).player_hit(0).call(&mut env.private());
 }
 
 pub unconstrained fn add_card_note_player(

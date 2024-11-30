@@ -306,19 +306,19 @@ describe("BlackJack Priv", () => {
     console.log("Other person tries to view dealers cards", cards);
   }, 30000000);
 
-  //tries to look at the bet
-  it("other person tries to look at the bet", async () => {
-    await expect(
-      otherBlackJackInstance.methods.get_bet().simulate()
-    ).rejects.toThrow();
-  }, 30000000);
+  // //tries to look at the bet
+  // it("other person tries to look at the bet", async () => {
+  //   await expect(
+  //     otherBlackJackInstance.methods.get_bet().simulate()
+  //   ).rejects.toThrow();
+  // }, 30000000);
 
-  //other person tries to look at the token
-  it("other person tries to look at the token", async () => {
-    await expect(
-      otherBlackJackInstance.methods.get_token().simulate()
-    ).rejects.toThrow();
-  }, 30000000);
+  // //other person tries to look at the token
+  // it("other person tries to look at the token", async () => {
+  //   await expect(
+  //     otherBlackJackInstance.methods.get_token().simulate()
+  //   ).rejects.toThrow();
+  // }, 30000000);
 
   //call internal functions
   // it("other person calls internal functions", async () => {

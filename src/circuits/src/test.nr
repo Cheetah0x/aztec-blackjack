@@ -7,3 +7,4 @@ mod playerStand;
 mod insurance;
 mod doubledown;
 mod playerhit;
+mod reset;

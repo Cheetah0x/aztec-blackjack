@@ -9,11 +9,8 @@ use dep::aztec::note::note_getter::view_notes;
 use dep::aztec::note::note_viewer_options::NoteViewerOptions;
 use dep::aztec::{
     oracle::{
-        execution::{get_block_number, get_contract_address},
-        random::random,
-        storage::storage_read,
-    },
-    prelude::{AztecAddress, NoteHeader},
+        execution::{get_block_number, get_contract_address}, random::random, storage::storage_read,
+    }, prelude::{AztecAddress, NoteHeader},
     protocol_types::storage::map::derive_storage_slot_in_map,
     test::helpers::{cheatcodes, test_environment::TestEnvironment},
 };
@@ -34,7 +31,7 @@ unconstrained fn noBet_begin_game() {
 unconstrained fn noBet_player_hit() {
     let (mut env, player, blackjack_contract, token_address) = setupPriv();
 
-    BlackJack::at(blackjack_contract).player_hit().call(&mut env.private());
+    BlackJack::at(blackjack_contract).player_hit(0).call(&mut env.private());
 }
 #[test(should_fail)]
 unconstrained fn no_begin_player_hit() {
@@ -44,7 +41,7 @@ unconstrained fn no_begin_player_hit() {
     env.impersonate(player);
     BlackJack::at(blackjack_contract).make_bet(100, token_address).call(&mut env.private());
 
-    BlackJack::at(blackjack_contract).player_hit().call(&mut env.private());
+    BlackJack::at(blackjack_contract).player_hit(0).call(&mut env.private());
 }
 #[test(should_fail)]
 unconstrained fn player_can_only_stand_is_begin_game() {

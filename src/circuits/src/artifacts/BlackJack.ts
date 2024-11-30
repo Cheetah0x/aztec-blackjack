@@ -108,49 +108,52 @@ export class BlackJackContract extends ContractBase {
   }
   
 
-  public static get storage(): ContractStorageLayout<'player_hand' | 'dealer_hand' | 'player_bust' | 'dealer_bust' | 'blackjack' | 'bet' | 'insurance' | 'token' | 'winner' | 'double_down' | 'split' | 'game_state'> {
+  public static get storage(): ContractStorageLayout<'player_hand' | 'split_hand' | 'dealer_hand' | 'player_bust' | 'dealer_bust' | 'blackjack' | 'bet' | 'split_bet' | 'insurance' | 'token' | 'has_split' | 'double_down' | 'game_state'> {
       return {
         player_hand: {
       slot: new Fr(1n),
     },
-dealer_hand: {
+split_hand: {
       slot: new Fr(2n),
     },
-player_bust: {
+dealer_hand: {
       slot: new Fr(3n),
     },
-dealer_bust: {
+player_bust: {
       slot: new Fr(4n),
     },
-blackjack: {
+dealer_bust: {
       slot: new Fr(5n),
     },
-bet: {
+blackjack: {
       slot: new Fr(6n),
     },
-insurance: {
+bet: {
       slot: new Fr(7n),
     },
-token: {
+split_bet: {
       slot: new Fr(8n),
     },
-winner: {
+insurance: {
       slot: new Fr(9n),
     },
-double_down: {
+token: {
       slot: new Fr(10n),
     },
-split: {
+has_split: {
       slot: new Fr(11n),
     },
-game_state: {
+double_down: {
       slot: new Fr(12n),
+    },
+game_state: {
+      slot: new Fr(13n),
     }
-      } as ContractStorageLayout<'player_hand' | 'dealer_hand' | 'player_bust' | 'dealer_bust' | 'blackjack' | 'bet' | 'insurance' | 'token' | 'winner' | 'double_down' | 'split' | 'game_state'>;
+      } as ContractStorageLayout<'player_hand' | 'split_hand' | 'dealer_hand' | 'player_bust' | 'dealer_bust' | 'blackjack' | 'bet' | 'split_bet' | 'insurance' | 'token' | 'has_split' | 'double_down' | 'game_state'>;
     }
     
 
-  public static get notes(): ContractNotes<'AddressNote' | 'UintNote' | 'ValueNote' | 'CardNote'> {
+  public static get notes(): ContractNotes<'AddressNote' | 'UintNote' | 'CardNote' | 'ValueNote'> {
     return {
       AddressNote: {
           id: new NoteSelector(2232136525),
@@ -158,13 +161,13 @@ game_state: {
 UintNote: {
           id: new NoteSelector(202136239),
         },
-ValueNote: {
-          id: new NoteSelector(1038582377),
-        },
 CardNote: {
           id: new NoteSelector(3719046069),
+        },
+ValueNote: {
+          id: new NoteSelector(1038582377),
         }
-    } as ContractNotes<'AddressNote' | 'UintNote' | 'ValueNote' | 'CardNote'>;
+    } as ContractNotes<'AddressNote' | 'UintNote' | 'CardNote' | 'ValueNote'>;
   }
   
 
@@ -216,8 +219,8 @@ CardNote: {
     /** player_hand() */
     player_hand: (() => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
 
-    /** player_hit() */
-    player_hit: (() => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
+    /** player_hit(hand: integer) */
+    player_hit: ((hand: (bigint | number)) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
 
     /** player_points() */
     player_points: (() => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
@@ -230,6 +233,9 @@ CardNote: {
 
     /** reset_game() */
     reset_game: (() => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
+
+    /** split_hand() */
+    split_hand: (() => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
 
     /** sync_notes() */
     sync_notes: (() => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
