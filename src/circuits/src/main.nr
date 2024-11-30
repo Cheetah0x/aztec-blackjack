@@ -424,6 +424,9 @@ contract BlackJack {
         let double_downed = storage.double_down.at(player).get_current_value();
         assert(double_downed == false, "Player has already doubled down");
 
+        //has split
+        let has_split = storage.has_split.at(player).get_current_value();
+
         if hand == 1 {
             location = storage.split_hand.at(player);
         }
@@ -431,8 +434,16 @@ contract BlackJack {
         //check that the player has cards in hand, do not need to check if the bet has been made
         //they can only have cards in their hand if that have already made a bet and started the game
         let player_cards = location.get_notes(NoteGetterOptions::new());
-        if hand == 0 {
-            assert(player_cards.len() >= 1, "Player does not have at least 1 card in their hand");
+
+        if (hand == 0) & !has_split {
+            assert(player_cards.len() >= 2, "Player does not have at least 2 cards in their hand");
+        }
+        if hand == 1 {
+            assert(has_split, "Cannot hit on split hand when not split");
+            assert(
+                player_cards.len() >= 1,
+                "Player does not have at least 2 cards in their split hand",
+            );
         }
 
         //make sure dealer has card
@@ -698,7 +709,7 @@ contract BlackJack {
     #[internal]
     unconstrained fn get_dealer_points(player: AztecAddress) -> pub u64 {
         let options = NoteViewerOptions::new();
-        let location = storage.player_hand.at(player);
+        let location = storage.dealer_hand.at(player);
         let cards = location.view_notes(options);
         let mut points = 0;
         let mut aces = 0;

@@ -1,11 +1,8 @@
 use crate::BlackJack;
 use crate::notes::CardNote::{Card, CardNote, Deck};
 use crate::test::utilsPriv::{
-    setupPriv, tokenSetup, check_bet, check_split_bet, add_card_note_player, add_card_note_dealer,
+    setupPriv, check_bet, check_split_bet, add_card_note_player, add_card_note_dealer,
 };
-use dep::address_note::address_note::AddressNote;
-use dep::aztec::note::note_getter::view_notes;
-use dep::aztec::note::note_viewer_options::NoteViewerOptions;
 use dep::aztec::{
     oracle::{
         execution::{get_block_number, get_contract_address}, random::random, storage::storage_read,
@@ -15,8 +12,6 @@ use dep::aztec::{
 };
 use dep::std::println;
 use dep::token::Token;
-use dep::uint_note::uint_note::UintNote;
-use std::test::OracleMock;
 
 #[test]
 unconstrained fn split() {
@@ -43,6 +38,16 @@ unconstrained fn split() {
     //check split hand
     let split_hand = BlackJack::at(blackjack_contract).get_split_hand().view(&mut env.private());
     println(f"Split hand: {split_hand}");
+    env.advance_block_by(2);
+
+    //check that the split flag is set
+    env.impersonate(player);
+    let unconstrained_context = env.unkonstrained();
+    let storage = BlackJack::Storage::init(unconstrained_context);
+    let has_split = storage.has_split.at(player).get_current_value();
+    println(f"Has split: {has_split}");
+
+    env.advance_block_by(2);
 
     //player hand should now have 1 card
     let player_hand = BlackJack::at(blackjack_contract).player_hand().view(&mut env.private());
@@ -63,7 +68,7 @@ unconstrained fn split() {
     env.impersonate(player);
     BlackJack::at(blackjack_contract).player_hit(1).call(&mut env.private());
 
-    //get the hands
+    //get the hands, shared mutable flags should be triggered, it is not
     let player_hand = BlackJack::at(blackjack_contract).player_hand().view(&mut env.private());
     let split_hand = BlackJack::at(blackjack_contract).get_split_hand().view(&mut env.private());
 
@@ -131,3 +136,4 @@ unconstrained fn split_fail_no_bet() {
     BlackJack::at(blackjack_contract).split().call(&mut env.private());
 }
 
+//the sharedmutable flags im using do not seem to be getting triggered

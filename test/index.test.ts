@@ -266,7 +266,7 @@ describe("BlackJack Priv", () => {
 
   it("player hits", async () => {
     // while (player_cards > 16) {
-    await playerBlackJackInstance.methods.player_hit().send().wait();
+    await playerBlackJackInstance.methods.player_hit(0).send().wait();
 
     let player_cards = await playerBlackJackInstance.methods
       .player_points()

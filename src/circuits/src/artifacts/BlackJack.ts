@@ -153,7 +153,7 @@ game_state: {
     }
     
 
-  public static get notes(): ContractNotes<'AddressNote' | 'UintNote' | 'CardNote' | 'ValueNote'> {
+  public static get notes(): ContractNotes<'AddressNote' | 'UintNote' | 'ValueNote' | 'CardNote'> {
     return {
       AddressNote: {
           id: new NoteSelector(2232136525),
@@ -161,13 +161,13 @@ game_state: {
 UintNote: {
           id: new NoteSelector(202136239),
         },
-CardNote: {
-          id: new NoteSelector(3719046069),
-        },
 ValueNote: {
           id: new NoteSelector(1038582377),
+        },
+CardNote: {
+          id: new NoteSelector(3719046069),
         }
-    } as ContractNotes<'AddressNote' | 'UintNote' | 'CardNote' | 'ValueNote'>;
+    } as ContractNotes<'AddressNote' | 'UintNote' | 'ValueNote' | 'CardNote'>;
   }
   
 
@@ -197,6 +197,9 @@ ValueNote: {
 
     /** get_bet() */
     get_bet: (() => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
+
+    /** get_split_hand() */
+    get_split_hand: (() => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
 
     /** get_token() */
     get_token: (() => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
@@ -234,8 +237,11 @@ ValueNote: {
     /** reset_game() */
     reset_game: (() => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
 
-    /** split_hand() */
-    split_hand: (() => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
+    /** split() */
+    split: (() => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
+
+    /** split_points() */
+    split_points: (() => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
 
     /** sync_notes() */
     sync_notes: (() => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;

@@ -105,6 +105,13 @@ export default function BlackjackGame() {
   const [isPlayerBust, setIsPlayerBust] = useState(false);
   const [isDealerBust, setIsDealerBust] = useState(false);
   const [isBlackjack, setIsBlackjack] = useState(false);
+  const [canSplit, setCanSplit] = useState(false);
+  const [hasSplit, setHasSplit] = useState(false);
+  const [splitHand, setSplitHand] = useState<Card[]>([]);
+  const [activeHand, setActiveHand] = useState(0); // 0 for main hand, 1 for split hand
+  const [splitPoints, setSplitPoints] = useState(0);
+  const [canDoubleDown, setCanDoubleDown] = useState(false);
+  const [gameOutcome, setGameOutcome] = useState<string>("");
 
   const handleSecretGenerated = (secret: string) => {
     setSecret(secret);
@@ -131,7 +138,13 @@ export default function BlackjackGame() {
         }
       }
     }
-  }, [gameState]);
+  }, [gameState, playerPoints, dealerPoints, isPlayerBust, isDealerBust, isBlackjack]);
+  
+  useEffect(() => {
+    if (gameState === "ended" && gameOutcome) {
+      alert(gameOutcome);
+    }
+  }, [gameState, gameOutcome]);
   
 
 
@@ -246,7 +259,7 @@ export default function BlackjackGame() {
       if (!blackjackInstance) return;
       console.log("Player hits...");
       const hitTx = await blackjackInstance.methods
-        .player_hit()
+        .player_hit(0)
         .send()
         .wait();
   
@@ -263,40 +276,37 @@ export default function BlackjackGame() {
   //   setDealerHand(dealerHand.map((card) => ({ ...card, hidden: false })));
   //   setGameState("ended");
   // };
+  // Update `stand` to call `updateGameOutcome`
   const stand = async () => {
     try {
       if (!blackjackInstance) return;
       console.log("Player stands...");
   
-      // Notify the contract that the player has chosen to stand
       await retryWithDelay(async () => {
-      const standTx = await blackjackInstance.methods
-        .player_stand()
-          .send()
-          .wait();
-  
+        const standTx = await blackjackInstance.methods.player_stand().send().wait();
         console.log("Player stand transaction:", standTx);
       });
   
-      // Update the game state to "dealer_turn"
-      setGameState("dealer_turn");
+      await delay(2000); // Ensure dealer actions are complete
   
-      // Update the dealer's hand to remove the hidden placeholder card
+      // Update hands and balances
       await updateHands();
+      await updateBalances();
   
-      // Ensure all dealer cards are visible at the end of the game
+      // Fetch the game outcome immediately
+      await updateGameOutcome();
+  
+      // Ensure all dealer cards are visible
       setDealerHand((prevDealerHand) =>
         prevDealerHand.map((card) => ({ ...card, hidden: false }))
       );
-      await updateBalances();
-
-      // Finalize the game state
+  
+      // Set the game state to "ended" after determining the outcome
       setGameState("ended");
     } catch (err) {
       console.error("Error standing:", err);
     }
   };
-  
   
 
   function processHandData(handRaw: CardData[]): ProcessedCard[] {
@@ -376,7 +386,7 @@ export default function BlackjackGame() {
         .player_hand()
         .simulate();
       const playerHandProcessed = processHandData(playerHandRaw);
-      console.log("playerhandprocessed", playerHandProcessed);
+      console.log("Player hand processed:", playerHandProcessed);
       setPlayerHand(playerHandProcessed);
   
       // Fetch dealer's hand
@@ -384,23 +394,72 @@ export default function BlackjackGame() {
         .dealer_hand()
         .simulate();
       const dealerHandProcessed = processHandData(dealerHandRaw);
-      console.log("dealerhandprocessed", dealerHandProcessed);
-      // Add a placeholder card (hidden) during the initial "playing" state
+      console.log("Dealer hand processed:", dealerHandProcessed);
+  
+      // Add placeholder card for the dealer if playing
       if (gameState === "playing" && dealerHandProcessed.length === 1) {
         dealerHandProcessed.push({ value: "?", suit: "", hidden: true });
       }
   
-      // Update the dealer's hand
       setDealerHand(dealerHandProcessed);
+  
+      // Determine if Double Down is possible
+      let playerBalance = 0;
+      if (tokenInstance) {
+        playerBalance = await tokenInstance.methods.balance_of_public(player).simulate();
+      };
+      
+
+      setCanDoubleDown(
+        playerHandProcessed.length === 2 &&
+        gameState === "playing" &&
+        playerPointsValue > 9 && playerPointsValue < 11
+      );
+      console.log("playerHandProcessed.length", playerHandProcessed.length);
+
+      setCanSplit(
+        playerHandProcessed.length === 2 &&
+        gameState === "playing" &&
+        !hasSplit &&
+        playerHandProcessed[0].value === playerHandProcessed[1].value
+      );      
+  
+      // Check if split is possible (first two cards are the same value)
+      if (
+        playerHandProcessed.length === 2 &&
+        gameState === "playing" &&
+        !hasSplit
+      ) {
+        const card1Value = playerHandProcessed[0].value;
+        const card2Value = playerHandProcessed[1].value;
+        setCanSplit(card1Value === card2Value);
+      } else {
+        setCanSplit(false);
+      }
   
       // Handle game state transitions
       if (isPlayerBustValue || isDealerBustValue || isBlackjackValue) {
         setGameState("ended");
       }
+  
+      // Update split hand info if split
+      if (hasSplit) {
+        const splitHandRaw: CardData[] = await blackjackInstance.methods
+          .get_split_hand()
+          .simulate();
+        const splitHandProcessed = processHandData(splitHandRaw);
+        setSplitHand(splitHandProcessed);
+  
+        const splitPointsValue = await blackjackInstance.methods
+          .split_points()
+          .simulate();
+        setSplitPoints(Number(splitPointsValue));
+      }
     } catch (err) {
       console.error("Error updating hands:", err);
     }
   };
+  
   
   
   
@@ -454,6 +513,107 @@ export default function BlackjackGame() {
     }
   };
 
+  const doubleDown = async () => {
+    try {
+      if (!blackjackInstance || !wallet || !tokenInstance || !blackjackAddress)
+        return;
+  
+      // Double the bet amount
+      const player = await wallet.getAddress();
+      const doubledBet = bet * 2;
+  
+      console.log(`Doubling down with bet: ${doubledBet}`);
+  
+      await tokenInstance.methods
+        .transfer_in_public(
+          player,
+          AztecAddress.fromString(blackjackAddress),
+          doubledBet,
+          0
+        )
+        .send()
+        .wait();
+  
+      console.log("Player doubles down...");
+      const doubleTx = await blackjackInstance.methods
+        .double_down()
+        .send()
+        .wait();
+  
+      console.log("Double down transaction:", doubleTx);
+  
+      // Update hands and balances
+      await updateHands();
+      await updateBalances();
+  
+      // After doubling down, automatically stand
+      await stand();
+    } catch (err) {
+      console.error("Error doubling down:", err);
+    }
+  };
+  
+
+  const split = async () => {
+    try {
+      if (!blackjackInstance || !wallet || !tokenInstance || !blackjackAddress) return;
+  
+      const player = await wallet.getAddress();
+  
+      // Transfer additional bet for split
+      await tokenInstance.methods
+        .transfer_in_public(player, AztecAddress.fromString(blackjackAddress), bet, 0)
+        .send()
+        .wait();
+  
+      // Call contract method to split the hand
+      const splitTx = await blackjackInstance.methods.split().send().wait();
+      console.log("Split transaction:", splitTx);
+  
+      setHasSplit(true);
+      setActiveHand(0); // Start with the first hand
+      await updateHands();
+      await updateBalances();
+    } catch (err) {
+      console.error("Error splitting:", err);
+    }
+  };
+  
+
+  const updateGameOutcome = async () => {
+    if (!blackjackInstance) return;
+  
+    try {
+      const playerPointsValue = await blackjackInstance.methods.player_points().simulate();
+      const dealerPointsValue = await blackjackInstance.methods.dealer_points().simulate();
+      const isPlayerBustValue = await blackjackInstance.methods.is_player_bust_view().simulate();
+      const isDealerBustValue = await blackjackInstance.methods.is_dealer_bust_view().simulate();
+      const isBlackjackValue = await blackjackInstance.methods.is_blackjack_view().simulate();
+  
+      if (isPlayerBustValue) {
+        setGameOutcome("Player Bust - Dealer Wins!");
+      } else if (isDealerBustValue) {
+        setGameOutcome("Dealer Bust - Player Wins!");
+      } else if (isBlackjackValue && playerPointsValue === 21n) {
+        setGameOutcome("Blackjack! Player Wins!");
+      } else if (Number(playerPointsValue) > Number(dealerPointsValue) && Number(playerPointsValue) <= 21) {
+        setGameOutcome("Player Wins!");
+      } else if (Number(dealerPointsValue) > Number(playerPointsValue) && Number(dealerPointsValue) <= 21) {
+        setGameOutcome("Dealer Wins!");
+      } else if (Number(playerPointsValue) === Number(dealerPointsValue)) {
+        setGameOutcome("Push - It's a Tie!");
+      } else {
+        setGameOutcome("Unexpected outcome");
+      }
+  
+      setGameState("ended");
+    } catch (err) {
+      console.error("Error updating game outcome:", err);
+      setGameOutcome("Error determining outcome");
+    }
+  };
+  
+  
   return (
     <div className="min-h-screen bg-green-800 flex flex-col items-center justify-center p-4">
       <ConnectAccountPopup
@@ -517,6 +677,18 @@ export default function BlackjackGame() {
             </div>
           </div>
 
+          {hasSplit && (
+            <div className="flex space-x-2">
+              <Button onClick={() => setActiveHand(0)} disabled={activeHand === 0}>
+                Play First Hand
+              </Button>
+              <Button onClick={() => setActiveHand(1)} disabled={activeHand === 1}>
+                Play Second Hand
+              </Button>
+            </div>
+          )}
+
+
           <div className="flex justify-between items-center">
             <div className="flex space-x-2">
               <Button onClick={dealCards} disabled={bet <= 0 || gameState !== "idle"}>
@@ -528,6 +700,26 @@ export default function BlackjackGame() {
               <Button onClick={stand} disabled={gameState !== "playing"}>
                 Stand
               </Button>
+              {canSplit && (
+                <Button 
+                  onClick={split} 
+                  disabled={!canSplit || gameState !== "playing"}
+                  className="bg-orange-500 hover:bg-orange-600"
+                >
+                  Split
+                </Button>
+              )}
+
+              {canDoubleDown && (
+                <Button
+                  onClick={doubleDown}
+                  disabled={!canDoubleDown || gameState !== "playing"}
+                  className="bg-purple-500 hover:bg-purple-600"
+                >
+                  Double Down
+                </Button>
+              )}
+
               {gameState === "ended" && (
                 <Button onClick={resetGame} className="bg-purple-500 hover:bg-purple-600">
                   Play Again
