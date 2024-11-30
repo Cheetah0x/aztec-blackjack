@@ -11,8 +11,7 @@ contract BlackJack {
         card_points, draw_card, draw_until_seventeen, is_blackjack,
     };
     use crate::notes::CardNote::{Card, CardNote, Deck};
-    use crate::notes::ValueNote::ValueNote;
-    use dep::address_note::address_note::AddressNote;
+    use crate::notes::{ValueNote::ValueNote, AddressNote::AddressNote};
     use dep::authwit::auth::{
         assert_current_call_valid_authwit, assert_current_call_valid_authwit_public,
         compute_authwit_message_hash_from_call, set_authorized,
@@ -37,6 +36,7 @@ contract BlackJack {
     use dep::aztec::oracle::debug_log::{debug_log, debug_log_format};
     use dep::token::Token;
     // use dep::value_note::value_note::ValueNote;
+    // use dep::address_note::address_note::AddressNote;
     use aztec::note::note_viewer_options::NoteViewerOptions;
 
     global ZERO_ADDRESS: AztecAddress = AztecAddress::from_field(
@@ -72,16 +72,37 @@ contract BlackJack {
     #[view]
     fn get_bet() -> u64 {
         let player = context.msg_sender();
-        let bet = storage.bet.at(player).get_note().note.value as u64;
-        bet
+        let slot = storage.bet.at(player).get_storage_slot();
+        let player_keys = get_public_keys(player);
+        let (bet_note, note_hash_for_read_request): (ValueNote, Field) =
+            get_note(&mut context, slot);
+        destroy_note_unsafe(&mut context, bet_note, note_hash_for_read_request);
+        create_note(
+            &mut context,
+            slot,
+            &mut ValueNote::new(bet_note.value, player),
+        )
+            .emit(encode_and_encrypt_note(&mut context, player_keys.ovpk_m, player, player));
+        bet_note.value as u64
     }
 
     #[private]
     #[view]
     fn get_token() -> AztecAddress {
         let player = context.msg_sender();
-        let token = storage.token.at(player).get_note().note.address;
-        token
+        // let token = storage.token.at(player).get_note().note.address;
+        let slot = storage.token.at(player).get_storage_slot();
+        let player_keys = get_public_keys(player);
+        let (token_note, note_hash_for_read_request): (AddressNote, Field) =
+            get_note(&mut context, slot);
+        destroy_note_unsafe(&mut context, token_note, note_hash_for_read_request);
+        create_note(
+            &mut context,
+            slot,
+            &mut AddressNote::new(token_note.address, player),
+        )
+            .emit(encode_and_encrypt_note(&mut context, player_keys.ovpk_m, player, player));
+        token_note.address
     }
 
     #[private]
@@ -240,7 +261,20 @@ contract BlackJack {
         assert(game_state == 1, "Game is not in progress");
 
         // 2. Bet validation
-        let bet = storage.bet.at(player).get_note().note.value as u64;
+        // let bet = storage.bet.at(player).get_note().note.value as u64;
+        let slot = storage.bet.at(player).get_storage_slot();
+        let player_keys = get_public_keys(player);
+        let (bet_note, note_hash_for_read_request): (ValueNote, Field) =
+            get_note(&mut context, slot);
+        destroy_note_unsafe(&mut context, bet_note, note_hash_for_read_request);
+        create_note(
+            &mut context,
+            slot,
+            &mut ValueNote::new(bet_note.value, player),
+        )
+            .emit(encode_and_encrypt_note(&mut context, player_keys.ovpk_m, player, player));
+        let bet = bet_note.value as u64;
+
         assert(bet > 0, "No existing bet found");
         let insurance_bet = (bet / 2) as Field;
 
@@ -264,6 +298,18 @@ contract BlackJack {
         ));
         // INTERACTIONS (external calls)
         // let token = storage.token.at(player).get_note().note.address;
+        let slot = storage.token.at(player).get_storage_slot();
+        let player_keys = get_public_keys(player);
+        let (token_note, note_hash_for_read_request): (AddressNote, Field) =
+            get_note(&mut context, slot);
+        destroy_note_unsafe(&mut context, token_note, note_hash_for_read_request);
+        create_note(
+            &mut context,
+            slot,
+            &mut AddressNote::new(token_note.address, player),
+        )
+            .emit(encode_and_encrypt_note(&mut context, player_keys.ovpk_m, player, player));
+        let token = token_note.address;
         // Token::at(token).transfer(contract_address, insurance_bet).call(&mut context);
     }
 
@@ -277,7 +323,20 @@ contract BlackJack {
 
         // CHECKS (validate state and inputs)
         // 1. Verify bet exists
-        let bet = storage.bet.at(player).get_note().note.value as u64;
+        // let bet = storage.bet.at(player).get_note().note.value as u64;
+        let slot = storage.bet.at(player).get_storage_slot();
+        let player_keys = get_public_keys(player);
+        let (bet_note, note_hash_for_read_request): (ValueNote, Field) =
+            get_note(&mut context, slot);
+        destroy_note_unsafe(&mut context, bet_note, note_hash_for_read_request);
+        create_note(
+            &mut context,
+            slot,
+            &mut ValueNote::new(bet_note.value, player),
+        )
+            .emit(encode_and_encrypt_note(&mut context, player_keys.ovpk_m, player, player));
+        let bet = bet_note.value as u64;
+
         assert(bet > 0, "No bet made");
 
         // 2. Verify game isn't already in progress
@@ -353,6 +412,18 @@ contract BlackJack {
         BlackJack::at(contract_address).update_double_down(true).enqueue(&mut context);
         // INTERACTIONS (external calls)
         // let token = storage.token.at(player).get_note().note.address;
+        let slot = storage.token.at(player).get_storage_slot();
+        let player_keys = get_public_keys(player);
+        let (token_note, note_hash_for_read_request): (AddressNote, Field) =
+            get_note(&mut context, slot);
+        destroy_note_unsafe(&mut context, token_note, note_hash_for_read_request);
+        create_note(
+            &mut context,
+            slot,
+            &mut AddressNote::new(token_note.address, player),
+        )
+            .emit(encode_and_encrypt_note(&mut context, player_keys.ovpk_m, player, player));
+        let token = token_note.address;
         // Token::at(token).transfer_in_private(player, contract_address, bet_value as Field, 0).call(&mut context);
     }
 
@@ -382,7 +453,19 @@ contract BlackJack {
         assert(first_card_rank == second_card_rank, "Cards are not of the same rank");
 
         // 5. Bet validation
-        let bet = storage.bet.at(player).get_note().note.value as u64;
+        // let bet = storage.bet.at(player).get_note().note.value as u64;
+        let slot = storage.bet.at(player).get_storage_slot();
+        let player_keys = get_public_keys(player);
+        let (bet_note, note_hash_for_read_request): (ValueNote, Field) =
+            get_note(&mut context, slot);
+        destroy_note_unsafe(&mut context, bet_note, note_hash_for_read_request);
+        create_note(
+            &mut context,
+            slot,
+            &mut ValueNote::new(bet_note.value, player),
+        )
+            .emit(encode_and_encrypt_note(&mut context, player_keys.ovpk_m, player, player));
+        let bet = bet_note.value as u64;
         assert(bet > 0, "No existing bet found");
 
         // EFFECTS (modify state)
@@ -416,6 +499,18 @@ contract BlackJack {
         // INTERACTIONS (external calls)
         //TODO: get authwit
         // let token = storage.token.at(player).get_note().note.address;
+        let slot = storage.token.at(player).get_storage_slot();
+        let player_keys = get_public_keys(player);
+        let (token_note, note_hash_for_read_request): (AddressNote, Field) =
+            get_note(&mut context, slot);
+        destroy_note_unsafe(&mut context, token_note, note_hash_for_read_request);
+        create_note(
+            &mut context,
+            slot,
+            &mut AddressNote::new(token_note.address, player),
+        )
+            .emit(encode_and_encrypt_note(&mut context, player_keys.ovpk_m, player, player));
+        let token = token_note.address;
         // Token::at(token).transfer_in_private(player, contract_address, bet as Field, 0).call(
         //     &mut context,
         // );
@@ -505,7 +600,19 @@ contract BlackJack {
 
         // 5. Bet validation
         // let bet = storage.bet.at(player).get_note().note.value as u64;
-        // assert(bet > 0, "No bet notes found");
+        let slot = storage.bet.at(player).get_storage_slot();
+        let player_keys = get_public_keys(player);
+        let (bet_note, note_hash_for_read_request): (ValueNote, Field) =
+            get_note(&mut context, slot);
+        destroy_note_unsafe(&mut context, bet_note, note_hash_for_read_request);
+        create_note(
+            &mut context,
+            slot,
+            &mut ValueNote::new(bet_note.value, player),
+        )
+            .emit(encode_and_encrypt_note(&mut context, player_keys.ovpk_m, player, player));
+        let bet = bet_note.value as u64;
+        assert(bet > 0, "No bet notes found");
         // EFFECTS (modify state)
         // 1. Calculate points
         let player_points = card_points(player_hand);
@@ -547,22 +654,51 @@ contract BlackJack {
 
         // Get bet amounts and token info
         // let bet = storage.bet.at(player).get_note().note.value;
+        let slot = storage.bet.at(player).get_storage_slot();
+        let player_keys = get_public_keys(player);
+        let (bet_note, note_hash_for_read_request): (ValueNote, Field) =
+            get_note(&mut context, slot);
+        destroy_note_unsafe(&mut context, bet_note, note_hash_for_read_request);
+        create_note(&mut context, slot, &mut ValueNote::new(0, player)).emit(
+            encode_and_encrypt_note(&mut context, player_keys.ovpk_m, player, player),
+        );
+        let bet = bet_note.value as u64;
         // let split_bet = storage.split_bet.at(player).get_note().note.value;
         // let token = storage.token.at(player).get_note().note.address;
+        let slot = storage.token.at(player).get_storage_slot();
+        let player_keys = get_public_keys(player);
+        let (token_note, note_hash_for_read_request): (AddressNote, Field) =
+            get_note(&mut context, slot);
+        destroy_note_unsafe(&mut context, token_note, note_hash_for_read_request);
+        create_note(
+            &mut context,
+            slot,
+            &mut AddressNote::new(token_note.address, player),
+        )
+            .emit(encode_and_encrypt_note(&mut context, player_keys.ovpk_m, player, player));
+        let token = token_note.address;
+
         let player_keys = get_public_keys(player);
         // // Handle main hand payout
         if player_wins_main {
             if player_blackjack {
                 // Blackjack pays 3:2
                 // let blackjack_payout = (bet * 3) / 2;
-                // Token::at(token).transfer_in_private(contract_address, player, blackjack_payout, 0).call(&mut context);
+                // Token::at(token)
+                //     .transfer_in_private(contract_address, player, (bet + (bet * 3) / 2) as Field, 0
+                //         )
+                //         .call(&mut context);
             } else {
                 // Regular win pays 1:1
-                // Token::at(token).transfer_in_private(contract_address, player, bet * 2, 0).call(&mut context);
+                // Token::at(token)
+                //     .transfer_in_private(contract_address, player, (bet * 2) as Field, 0)
+                //     .call(&mut context);
             }
         } else if player_ties_main {
             // Return original bet on tie
-            // Token::at(token).transfer_in_private(contract_address, player, bet, 0).call(&mut context);
+            // Token::at(token).transfer_in_private(contract_address, player, bet as Field, 0).call(
+            //     &mut context,
+            // );
         }
 
         // Handle split payouts if applicable
@@ -614,14 +750,11 @@ contract BlackJack {
 
         // 2. Clear bet notes
         // TODO: Implement bet note clearing once note destruction is supported
-        // let slot = storage.bet.at(player).get_storage_slot();
-        // let player_keys = get_public_keys(player);
-        // let (bet_note, note_hash_for_read_request): (ValueNote, Field) =
-        //     get_note(&mut context, slot);
-        // destroy_note_unsafe(&mut context, bet_note, note_hash_for_read_request);
-        // create_note(&mut context, slot, &mut ValueNote::new(0, player)).emit(
-        //     encode_and_encrypt_note(&mut context, player_keys.ovpk_m, player, player),
-        // );
+        let slot = storage.bet.at(player).get_storage_slot();
+        let player_keys = get_public_keys(player);
+        let (bet_note, note_hash_for_read_request): (ValueNote, Field) =
+            get_note(&mut context, slot);
+        destroy_note_unsafe(&mut context, bet_note, note_hash_for_read_request);
         // Reset game state flags
         let contract_address = context.this_address();
         BlackJack::at(contract_address).is_player_bust(false).enqueue(&mut context);
@@ -802,3 +935,4 @@ contract BlackJack {
 
 //TODO: need to update so u can stand for the separate hands.
 
+//TODO: report issue with get note. Once you get the note, it creates a new one but you cannot see it again because you dont emit the note.

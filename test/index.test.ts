@@ -9,6 +9,8 @@ import {
   ContractInstanceWithAddress,
   computeAuthWitMessageHash,
   computeInnerAuthWitHash,
+  deriveKeys,
+  Fr,
 } from "@aztec/aztec.js";
 import {
   BlackJackContractArtifact,
@@ -19,6 +21,7 @@ import {
   TokenContract,
 } from "../src/circuits/src/artifacts/Token";
 import { setupSandbox, createAccount, retryWithDelay, delay } from "./utils";
+import { type PublicKeys, computePartialAddress } from "@aztec/circuits.js";
 
 describe("BlackJack Priv", () => {
   let pxe: PXE;
@@ -26,6 +29,7 @@ describe("BlackJack Priv", () => {
   let otherWallet: AccountWallet;
   let player: AztecAddress;
   let other: AztecAddress;
+  // let blackjackContract: Contract;
   let blackjackContract: Contract;
   let playerBlackJackInstance: BlackJackContract;
   let otherBlackJackInstance: BlackJackContract;
@@ -43,17 +47,31 @@ describe("BlackJack Priv", () => {
     player = playerWallet.getAddress();
     other = otherWallet.getAddress();
 
-    blackjackContract = await Contract.deploy(
-      playerWallet,
-      BlackJackContractArtifact,
-      [],
-      "constructor"
-    )
-      .send()
-      .deployed();
+    // blackjackContract = await Contract.deploy(
+    //   playerWallet,
+    //   BlackJackContractArtifact,
+    //   [],
+    //   "constructor"
+    // )
+    //   .send()
+    //   .deployed();
 
+    // blackJackAddress = blackjackContract.address;
+    // console.log("Blackjack contract deployed at", blackJackAddress);
+
+    const blackjackSecretKey = Fr.random();
+    const blackjackPublicKeys = deriveKeys(blackjackSecretKey).publicKeys;
+    const blackjackdeployment = BlackJackContract.deployWithPublicKeys(
+      blackjackPublicKeys,
+      playerWallet
+    );
+    const blackjackInstance = blackjackdeployment.getInstance();
+    await pxe.registerAccount(
+      blackjackSecretKey,
+      computePartialAddress(blackjackInstance)
+    );
+    blackjackContract = await blackjackdeployment.send().deployed();
     blackJackAddress = blackjackContract.address;
-    console.log("Blackjack contract deployed at", blackJackAddress);
 
     //player instance
     playerBlackJackInstance = await BlackJackContract.at(
