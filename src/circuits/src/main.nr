@@ -414,6 +414,7 @@ contract BlackJack {
     //TODO: event emission??
     #[private]
     fn player_hit(hand: u64) {
+        assert(hand == (1 | 0));
         //read the cards that have been used, will not do this for now.
         //get the player cards
         let player = context.msg_sender();
@@ -801,4 +802,6 @@ contract BlackJack {
 // set_authorized(&mut context, message_hash, true);
 
 //something to do with the randomness now.
+
+//TODO: need to update so u can stand for the separate hands.
 
