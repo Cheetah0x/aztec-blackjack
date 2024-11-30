@@ -45,7 +45,7 @@ aztec start --sandbox
 4. Compile the Noir contracts and generate artifacts:
 
 ```bash
-yarn prep
+yarn compile && yarn codegen
 ```
 
 5. Start the development server:
